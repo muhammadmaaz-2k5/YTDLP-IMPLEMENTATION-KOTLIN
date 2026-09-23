@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MediaSaver</string>
+    <string name="quick_download_tile_label">Quick Download</string>
+</resources>

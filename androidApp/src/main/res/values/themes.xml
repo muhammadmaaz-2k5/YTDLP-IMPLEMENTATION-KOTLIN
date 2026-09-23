@@ -1,0 +1,16 @@
+<resources>
+    <style name="Theme.MediaSaver" parent="Theme.Material3.DayNight.NoActionBar" />
+
+    <!--
+       MainActivity launches with this theme (see AndroidManifest.xml), then
+       installSplashScreen()'s postSplashScreenTheme switches it back to Theme.MediaSaver once
+       the first frame of real content is drawn. Same brand glyph as the launcher icon (the
+       download mark), on the same purple used at the top of Onboarding, for a seamless
+       cold-start → onboarding transition on a first install.
+    -->
+    <style name="Theme.MediaSaver.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.MediaSaver</item>
+    </style>
+</resources>

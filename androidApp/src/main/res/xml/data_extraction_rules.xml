@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   API 31+ equivalent of backup_rules.xml — see that file's comment for why history.json is
+   excluded. device-transfer (direct device-to-device migration, e.g. Google's own transfer tool)
+   deliberately keeps history included — that's a local, user-initiated move to hardware the user
+   already controls, not data going to a third-party cloud, so excluding it there would just cost
+   the user their history for no privacy benefit.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="history.json" />
+    </cloud-backup>
+</data-extraction-rules>

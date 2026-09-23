@@ -1,0 +1,76 @@
+[versions]
+agp         = "9.3.1"
+kotlin      = "2.2.0"
+compose     = "1.9.3"
+
+coreKtx               = "1.13.1"
+lifecycleRuntimeKtx   = "2.8.7"
+activityCompose       = "1.9.3"
+junit                 = "4.13.2"
+junitVersion          = "1.2.1"
+espressoCore          = "3.6.1"
+coroutines            = "1.9.0"
+serialization         = "1.7.3"
+material              = "1.12.0"
+chaquopy              = "17.0.0"
+coil                  = "3.0.4"
+ktor                  = "3.0.3"
+composeIcons          = "1.1.1"
+navigationCompose     = "2.9.7"
+workManager           = "2.10.2"
+splashscreen          = "1.2.0"
+lifecycleProcess      = "2.8.7"
+playServicesAds       = "25.5.0"
+userMessagingPlatform = "4.0.0"
+
+[libraries]
+# AndroidX (androidMain)
+androidx-core-ktx                   = { group = "androidx.core",           name = "core-ktx",                       version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx      = { group = "androidx.lifecycle",      name = "lifecycle-runtime-ktx",          version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose           = { group = "androidx.activity",       name = "activity-compose",               version.ref = "activityCompose" }
+material                            = { group = "com.google.android.material", name = "material",                    version.ref = "material" }
+
+# Image loading (thumbnails)
+coil-compose                        = { group = "io.coil-kt.coil3",       name = "coil-compose",                   version.ref = "coil" }
+coil-network-ktor3                  = { group = "io.coil-kt.coil3",       name = "coil-network-ktor3",             version.ref = "coil" }
+ktor-client-android                 = { group = "io.ktor",                name = "ktor-client-android",            version.ref = "ktor" }
+
+# Brand icons (platform quick-open row) — Simple Icons pack, CC0
+compose-icons-simple                = { group = "br.com.devsrsouza.compose.icons", name = "simple-icons",          version.ref = "composeIcons" }
+
+# Navigation (androidApp only — classic stable AndroidX Navigation Compose)
+androidx-navigation-compose         = { group = "androidx.navigation",    name = "navigation-compose",             version.ref = "navigationCompose" }
+
+# Background download engine (survives process death, foreground-service progress notification)
+androidx-work-runtime-ktx           = { group = "androidx.work",          name = "work-runtime-ktx",               version.ref = "workManager" }
+
+# Splash screen (branded launch, API 28+ compat via the same API used natively on 31+)
+androidx-core-splashscreen          = { group = "androidx.core",          name = "core-splashscreen",              version.ref = "splashscreen" }
+
+# App Open ad lifecycle tracking (process-level foreground/background signal)
+androidx-lifecycle-process          = { group = "androidx.lifecycle",     name = "lifecycle-process",              version.ref = "lifecycleProcess" }
+
+# Ads (AdMob) — all 5 formats + mandatory UMP consent flow
+play-services-ads                   = { group = "com.google.android.gms", name = "play-services-ads",              version.ref = "playServicesAds" }
+user-messaging-platform             = { group = "com.google.android.ump", name = "user-messaging-platform",        version.ref = "userMessagingPlatform" }
+
+# Coroutines
+kotlinx-coroutines-core             = { group = "org.jetbrains.kotlinx",   name = "kotlinx-coroutines-core",        version.ref = "coroutines" }
+kotlinx-coroutines-android          = { group = "org.jetbrains.kotlinx",   name = "kotlinx-coroutines-android",     version.ref = "coroutines" }
+
+# Serialization
+kotlinx-serialization-json          = { group = "org.jetbrains.kotlinx",   name = "kotlinx-serialization-json",     version.ref = "serialization" }
+
+# Testing
+junit                               = { group = "junit",                   name = "junit",                          version.ref = "junit" }
+androidx-junit                      = { group = "androidx.test.ext",       name = "junit",                          version.ref = "junitVersion" }
+androidx-espresso-core              = { group = "androidx.test.espresso",  name = "espresso-core",                  version.ref = "espressoCore" }
+
+[plugins]
+android-application                     = { id = "com.android.application",                      version.ref = "agp" }
+android-kotlin-multiplatform-library    = { id = "com.android.kotlin.multiplatform.library",      version.ref = "agp" }
+kotlin-multiplatform                    = { id = "org.jetbrains.kotlin.multiplatform",            version.ref = "kotlin" }
+jetbrains-compose                       = { id = "org.jetbrains.compose",                         version.ref = "compose" }
+compose-compiler                        = { id = "org.jetbrains.kotlin.plugin.compose",           version.ref = "kotlin" }
+kotlin-serialization                    = { id = "org.jetbrains.kotlin.plugin.serialization",     version.ref = "kotlin" }
+chaquopy                                = { id = "com.chaquo.python",                             version.ref = "chaquopy" }

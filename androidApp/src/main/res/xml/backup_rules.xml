@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Applies on API 23–30 (API 31+ uses data_extraction_rules.xml instead).
+   Download history (titles, thumbnails, platform) can reveal what a user has downloaded, so it's
+   kept out of Android's cloud backup — this makes the Privacy Policy's "stays on your device"
+   claim actually true, rather than silently contradicted by the OS's own default backup behavior.
+   App preferences (theme, settings, premium plan) are left in the default (backed up), since
+   restoring those on a new device is a genuine convenience with no privacy cost.
+-->
+<full-backup-content>
+    <exclude domain="file" path="history.json" />
+</full-backup-content>

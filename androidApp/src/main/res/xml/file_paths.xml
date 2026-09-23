@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Used by androidx.core.content.FileProvider (declared in AndroidManifest.xml) to safely expose
+   files to other apps via content:// URIs instead of raw file:// paths.
+
+   Covers two cases:
+   - cache-path "ytdlp_downloads": the private temp dir ChaquopyYtDlpEngine writes into before
+     MediaStoreFileStore publishes the finished file (not normally shared directly, but covered
+     defensively).
+   - external-path "legacy_downloads": the public Downloads folder used only on API 28, where
+     MediaStore.Downloads (API 29+) isn't available — see MediaStoreFileStore.publishViaLegacyFile.
+-->
+<paths>
+    <cache-path name="ytdlp_downloads" path="ytdlp_downloads/" />
+    <external-path name="legacy_downloads" path="Download/" />
+</paths>

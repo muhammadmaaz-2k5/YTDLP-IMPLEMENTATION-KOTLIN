@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- No READ_EXTERNAL_STORAGE: this app only ever writes downloads (via MediaStore on API 29+,
+         via WRITE_EXTERNAL_STORAGE below on API 28 only) — it never reads the user's existing
+         media library, so it doesn't need read access to shared storage at all. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets the download Worker promote itself to a foreground service while active, so Android
+         doesn't kill it for running in the background — required (with a declared type) on API 34+. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <application
+        android:name=".MediaSaverApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MediaSaver"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <!--
+           GOOGLE'S PUBLISHED TEST APP ID — safe to ship as-is for development, but real ads will
+           never earn revenue with it. Replace with your own AdMob app's ID (from the AdMob
+           console → App settings) before a real release. Using a live App ID during development
+           risks invalid-traffic flags on your AdMob account, so don't swap this out until you're
+           ready to actually ship.
+        -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.MediaSaver.Splash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!--
+               Makes MediaSaver appear as a Share sheet target from Instagram, Facebook, YouTube,
+               X, Pinterest, browsers, etc. — the legitimate, OS-sanctioned equivalent of "suggest
+               our app on these apps" (no special permission needed, unlike a cross-app overlay).
+               text/html is included because some browsers/apps share links under that mime type.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/html" />
+            </intent-filter>
+        </activity>
+
+        <!--
+           Quick Settings tile — swipe-down panel shortcut to launch the app directly, from any
+           screen (even locked, if the user allows it), without hunting for the launcher icon.
+        -->
+        <service
+            android:name=".QuickDownloadTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_download"
+            android:label="@string/quick_download_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!--
+           WorkManager's own internal foreground-service used by setForeground()/getForegroundInfo()
+           in DownloadWorker. Android 14+ (API 34) requires a declared foreground service type for
+           any FGS; this merges "dataSync" onto WorkManager's own manifest declaration of this
+           service rather than redeclaring the whole service ourselves.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <!--
+           Exposes downloaded files to other apps (share sheet, viewer apps) as content:// URIs.
+           Only actually exercised on API 28, where MediaStore.Downloads isn't available yet and
+           MediaStoreFileStore falls back to a plain file in the public Downloads directory —
+           without this, sharing that file would throw FileUriExposedException.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+
+</manifest>

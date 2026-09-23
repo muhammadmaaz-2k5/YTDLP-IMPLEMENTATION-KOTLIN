@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon foreground — a white download glyph (same motif used on Home's header badge,
+     the Quick Settings tile, and notifications), centered in the adaptive-icon safe zone so it
+     survives circle/squircle/rounded-square masking on every launcher. Also reused directly as
+     the splash screen icon (see themes.xml) for one consistent brand mark everywhere. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="26"
+        android:translateY="26"
+        android:scaleX="2.3333"
+        android:scaleY="2.3333">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M19,9h-4L15,3L9,3v6L5,9l7,7L19,9zM5,18v2h14v-2L5,18z" />
+    </group>
+</vector>
