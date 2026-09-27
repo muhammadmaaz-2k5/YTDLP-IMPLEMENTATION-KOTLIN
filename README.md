@@ -1,5 +1,8 @@
 # MediaSaver
 
+<img width="406" height="898" alt="image" src="https://github.com/user-attachments/assets/4dc142b8-965d-49f1-93c5-56b508f83a44" />
+
+
 A Kotlin Multiplatform (Android-only in practice) video/image downloader. Runs [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 and [ffmpeg](https://ffmpeg.org) entirely on-device — no backend server, no remote API of its own.
 Paste a link (Facebook, Instagram, YouTube, TikTok, and anything else yt-dlp supports) and it
