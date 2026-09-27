@@ -25,8 +25,40 @@ import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAdLoa
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.lang.ref.WeakReference
 import java.util.Date
+import java.util.concurrent.CopyOnWriteArrayList
+
+/**
+ * Standard ad formats supported across the app.
+ */
+enum class AdFormat {
+    BANNER,
+    NATIVE,
+    INTERSTITIAL,
+    REWARDED,
+    REWARDED_INTERSTITIAL,
+    APP_OPEN
+}
+
+/**
+ * Reactive events emitted during ad lifecycle for telemetry, debugging, and UI responsiveness.
+ */
+sealed interface AdEvent {
+    data class StateChanged(val adsEnabled: Boolean) : AdEvent
+    data class AdLoaded(val format: AdFormat) : AdEvent
+    data class AdFailedToLoad(val format: AdFormat, val errorMessage: String, val errorCode: Int = -1) : AdEvent
+    data class AdShown(val format: AdFormat) : AdEvent
+    data class AdDismissed(val format: AdFormat) : AdEvent
+    data class AdClicked(val format: AdFormat) : AdEvent
+    data class RewardEarned(val format: AdFormat, val amount: Int = 1, val type: String = "Reward") : AdEvent
+}
 
 /**
  * Every AdMob/UMP SDK touchpoint in the app lives here — `androidApp` only makes thin,
@@ -39,6 +71,41 @@ import java.util.Date
  * first is a legal requirement, not just an AdMob policy — see [initializeConsentAndAds].
  */
 object AdsController {
+
+    private val _adsEnabled = MutableStateFlow(true)
+    val adsEnabled: StateFlow<Boolean> = _adsEnabled.asStateFlow()
+
+    private val _events = MutableSharedFlow<AdEvent>(extraBufferCapacity = 64)
+    val events: SharedFlow<AdEvent> = _events.asSharedFlow()
+
+    private val eventListeners = CopyOnWriteArrayList<(AdEvent) -> Unit>()
+
+    fun addEventListener(listener: (AdEvent) -> Unit): () -> Unit {
+        eventListeners.add(listener)
+        return { eventListeners.remove(listener) }
+    }
+
+    fun notifyEvent(event: AdEvent) {
+        _events.tryEmit(event)
+        eventListeners.forEach { runCatching { it(event) } }
+    }
+
+    fun isAdsEnabled(): Boolean = _adsEnabled.value
+
+    fun setAdsEnabled(enabled: Boolean) {
+        if (_adsEnabled.value == enabled) return
+        _adsEnabled.value = enabled
+        notifyEvent(AdEvent.StateChanged(enabled))
+        if (!enabled) {
+            interstitialAd = null
+            rewardedAd = null
+            rewardedInterstitialAd = null
+            appOpenAdManager.clearAd()
+            retryHandler.removeCallbacksAndMessages(null)
+        } else {
+            appContextForRetry?.let { preloadAll(it) }
+        }
+    }
 
     private var consentInformation: ConsentInformation? = null
     private var adsInitialized = false
@@ -124,8 +191,8 @@ object AdsController {
         adsInitialized = true
     }
 
-    /** Whether ads may be requested at all right now (consent obtained/not required, and SDK initialized). */
-    fun canShowAds(): Boolean = adsInitialized && consentInformation?.canRequestAds() == true
+    /** Whether ads may be requested at all right now (consent obtained/not required, SDK initialized, and user hasn't disabled ads). */
+    fun canShowAds(): Boolean = _adsEnabled.value && adsInitialized && consentInformation?.canRequestAds() == true
 
     /**
      * Whether Settings should show a "Manage ad consent" row — only relevant for users the UMP
@@ -174,10 +241,12 @@ object AdsController {
                     interstitialAd = ad
                     interstitialLoading = false
                     interstitialFailCount = 0
+                    notifyEvent(AdEvent.AdLoaded(AdFormat.INTERSTITIAL))
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     interstitialAd = null
                     interstitialLoading = false
+                    notifyEvent(AdEvent.AdFailedToLoad(AdFormat.INTERSTITIAL, error.message, error.code))
                     retryWithBackoff(interstitialFailCount++) {
                         appContextForRetry?.let { preloadInterstitial(it) }
                     }
@@ -199,14 +268,19 @@ object AdsController {
             return
         }
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdShowedFullScreenContent() {
+                notifyEvent(AdEvent.AdShown(AdFormat.INTERSTITIAL))
+            }
             override fun onAdDismissedFullScreenContent() {
                 interstitialAd = null
                 FrequencyGuard.recordShown(KEY_INTERSTITIAL)
+                notifyEvent(AdEvent.AdDismissed(AdFormat.INTERSTITIAL))
                 preloadInterstitial(activity.applicationContext)
                 onDismissed()
             }
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
                 interstitialAd = null
+                notifyEvent(AdEvent.AdFailedToLoad(AdFormat.INTERSTITIAL, error.message, error.code))
                 onDismissed()
             }
         }
@@ -231,10 +305,12 @@ object AdsController {
                     rewardedAd = ad
                     rewardedLoading = false
                     rewardedFailCount = 0
+                    notifyEvent(AdEvent.AdLoaded(AdFormat.REWARDED))
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     rewardedAd = null
                     rewardedLoading = false
+                    notifyEvent(AdEvent.AdFailedToLoad(AdFormat.REWARDED, error.message, error.code))
                     retryWithBackoff(rewardedFailCount++) {
                         appContextForRetry?.let { preloadRewarded(it) }
                     }
@@ -252,16 +328,24 @@ object AdsController {
             return
         }
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdShowedFullScreenContent() {
+                notifyEvent(AdEvent.AdShown(AdFormat.REWARDED))
+            }
             override fun onAdDismissedFullScreenContent() {
                 rewardedAd = null
+                notifyEvent(AdEvent.AdDismissed(AdFormat.REWARDED))
                 preloadRewarded(activity.applicationContext)
             }
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
                 rewardedAd = null
+                notifyEvent(AdEvent.AdFailedToLoad(AdFormat.REWARDED, error.message, error.code))
                 onUnavailable()
             }
         }
-        ad.show(activity) { onRewardEarned() }
+        ad.show(activity) { rewardItem ->
+            notifyEvent(AdEvent.RewardEarned(AdFormat.REWARDED, rewardItem.amount, rewardItem.type))
+            onRewardEarned()
+        }
     }
 
     // ── Rewarded Interstitial ────────────────────────────────────────────────────
@@ -287,10 +371,12 @@ object AdsController {
                     rewardedInterstitialAd = ad
                     rewardedInterstitialLoading = false
                     rewardedInterstitialFailCount = 0
+                    notifyEvent(AdEvent.AdLoaded(AdFormat.REWARDED_INTERSTITIAL))
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     rewardedInterstitialAd = null
                     rewardedInterstitialLoading = false
+                    notifyEvent(AdEvent.AdFailedToLoad(AdFormat.REWARDED_INTERSTITIAL, error.message, error.code))
                     retryWithBackoff(rewardedInterstitialFailCount++) {
                         appContextForRetry?.let { preloadRewardedInterstitial(it) }
                     }
@@ -313,17 +399,25 @@ object AdsController {
             return
         }
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdShowedFullScreenContent() {
+                notifyEvent(AdEvent.AdShown(AdFormat.REWARDED_INTERSTITIAL))
+            }
             override fun onAdDismissedFullScreenContent() {
                 rewardedInterstitialAd = null
                 FrequencyGuard.recordShown(KEY_REWARDED_INTERSTITIAL)
+                notifyEvent(AdEvent.AdDismissed(AdFormat.REWARDED_INTERSTITIAL))
                 preloadRewardedInterstitial(activity.applicationContext)
             }
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
                 rewardedInterstitialAd = null
+                notifyEvent(AdEvent.AdFailedToLoad(AdFormat.REWARDED_INTERSTITIAL, error.message, error.code))
                 onUnavailable()
             }
         }
-        ad.show(activity) { onRewardEarned() }
+        ad.show(activity) { rewardItem ->
+            notifyEvent(AdEvent.RewardEarned(AdFormat.REWARDED_INTERSTITIAL, rewardItem.amount, rewardItem.type))
+            onRewardEarned()
+        }
     }
 
     // ── App Open ──────────────────────────────────────────────────────────────────
@@ -369,6 +463,12 @@ object AdsController {
         private var loadTimeMs = 0L
         private var failCount = 0
 
+        fun clearAd() {
+            appOpenAd = null
+            isShowingAd = false
+            isLoadingAd = false
+        }
+
         fun loadAd(context: Context) {
             if (isLoadingAd || appOpenAd != null || !canShowAds()) return
             isLoadingAd = true
@@ -382,9 +482,11 @@ object AdsController {
                         isLoadingAd = false
                         loadTimeMs = Date().time
                         failCount = 0
+                        notifyEvent(AdEvent.AdLoaded(AdFormat.APP_OPEN))
                     }
                     override fun onAdFailedToLoad(error: LoadAdError) {
                         isLoadingAd = false
+                        notifyEvent(AdEvent.AdFailedToLoad(AdFormat.APP_OPEN, error.message, error.code))
                         retryWithBackoff(failCount++) {
                             appContextForRetry?.let { loadAd(it) }
                         }
@@ -398,14 +500,19 @@ object AdsController {
             val ad = appOpenAd ?: return
             isShowingAd = true
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdShowedFullScreenContent() {
+                    notifyEvent(AdEvent.AdShown(AdFormat.APP_OPEN))
+                }
                 override fun onAdDismissedFullScreenContent() {
                     appOpenAd = null
                     isShowingAd = false
+                    notifyEvent(AdEvent.AdDismissed(AdFormat.APP_OPEN))
                     loadAd(activity.applicationContext)
                 }
                 override fun onAdFailedToShowFullScreenContent(error: AdError) {
                     appOpenAd = null
                     isShowingAd = false
+                    notifyEvent(AdEvent.AdFailedToLoad(AdFormat.APP_OPEN, error.message, error.code))
                 }
             }
             ad.show(activity)

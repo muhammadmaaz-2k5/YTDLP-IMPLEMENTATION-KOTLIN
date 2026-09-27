@@ -2,6 +2,7 @@ package com.mediasaver.app.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -10,15 +11,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mediasaver.app.ui.theme.BentoDarkCardBg
+import com.mediasaver.app.ui.theme.BentoPeachContainer
 
 /**
- * Dismissible error banner with optional Retry action.
- *
- * @param message   User-facing error text.
- * @param canRetry  Shows a "Retry" button when true.
- * @param onRetry   Called when the user taps Retry.
- * @param onDismiss Called when the user taps the ✕ button.
+ * Dismissible error banner styled with modern Bento pastel aesthetics.
  */
 @Composable
 fun ErrorBanner(
@@ -28,61 +29,77 @@ fun ErrorBanner(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    BentoSurfaceCard(
         modifier = modifier.fillMaxWidth(),
-        colors   = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        ),
-        shape = MaterialTheme.shapes.medium
+        backgroundColor = BentoPeachContainer,
+        cornerRadius = 24.dp
     ) {
         Row(
-            modifier            = Modifier.padding(16.dp),
-            verticalAlignment   = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Icon(
-                imageVector        = Icons.Default.ErrorOutline,
-                contentDescription = "Error",
-                tint               = MaterialTheme.colorScheme.onErrorContainer,
-                modifier           = Modifier.size(24.dp).padding(top = 2.dp)
+            BentoCircleBadge(
+                icon = Icons.Default.ErrorOutline,
+                backgroundColor = Color.White,
+                tint = Color(0xFFDC2626),
+                size = 40.dp
             )
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text  = "Something went wrong",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    text = "Something went wrong",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BentoDarkCardBg
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text  = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                    text = message,
+                    fontSize = 13.sp,
+                    color = Color(0xFF6B7280),
+                    lineHeight = 18.sp
                 )
                 if (canRetry) {
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedButton(
+                    Spacer(Modifier.height(10.dp))
+                    Button(
                         onClick = onRetry,
-                        colors  = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = BentoDarkCardBg
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        modifier = Modifier.height(36.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp),
+                            tint = BentoDarkCardBg
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("Retry")
+                        Text(
+                            text = "Retry",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
-            IconButton(onClick = onDismiss) {
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(28.dp)
+            ) {
                 Icon(
-                    imageVector        = Icons.Default.Close,
+                    imageVector = Icons.Default.Close,
                     contentDescription = "Dismiss error",
-                    tint               = MaterialTheme.colorScheme.onErrorContainer
+                    tint = Color(0xFF9CA3AF),
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
     }
 }
+

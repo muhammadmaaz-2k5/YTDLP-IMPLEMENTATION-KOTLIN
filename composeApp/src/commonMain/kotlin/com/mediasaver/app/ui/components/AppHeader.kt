@@ -1,274 +1,475 @@
 package com.mediasaver.app.ui.components
 
-import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mediasaver.app.ui.theme.Brand400
-import com.mediasaver.app.ui.theme.Brand600
-import com.mediasaver.app.ui.theme.GradientEnd
-import com.mediasaver.app.ui.theme.GradientStart
+import com.mediasaver.app.ui.theme.*
 
-// The glass card's background/border/text colors are read from MaterialTheme.colorScheme inside
-// AppHeader() itself (not module-level constants) — same MaterialTheme.colorScheme.inverseSurface
-// token FloatingPillNavBar uses, so the header actually responds to Settings' Appearance
-// (Light/Dark/System) instead of being permanently dark regardless of the chosen theme.
-private val LogoGradient     = Brush.linearGradient(
-    colors  = listOf(GradientStart, GradientEnd),
-    start   = Offset(0f, 0f),
-    end     = Offset(60f, 60f)
-)
-private val ShimmerGradient = Brush.linearGradient(
-    listOf(
-        Color.White.copy(0.0f),
-        Color.White.copy(0.18f),
-        Color.White.copy(0.0f)
-    )
+data class HeaderAction(
+    val icon: ImageVector,
+    val contentDescription: String,
+    val onClick: () -> Unit
 )
 
 /**
- * Reusable professional app header — a dark glassmorphic card with:
- *
- * - **Left**: gradient brand logo pill with an icon + animated shimmer sweep
- * - **Centre**: app name (bold) + tagline (dimmed)
- * - **Right**: one or two icon action buttons (e.g. info, premium)
- *
- * Designed to complement [FloatingPillNavBar] — same dark-surface language,
- * same corner-radius convention, same ambient shadow depth.
- *
- * ```kotlin
- * AppHeader(
- *     appName    = "MediaSaver",
- *     tagline    = "Download from any platform",
- *     logoIcon   = Icons.Outlined.Download,
- *     actions    = listOf(
- *         HeaderAction(Icons.Default.Info,             "About")    { showAbout = true },
- *         HeaderAction(Icons.Default.WorkspacePremium, "Premium")  { openPremium() }
- *     )
- * )
- * ```
- *
- * @param appName   Bold title text.
- * @param tagline   Smaller subtitle shown beneath the name.
- * @param logoIcon  Icon drawn inside the gradient logo pill on the left.
- * @param actions   Up to 3 trailing icon-button actions (right side).
- * @param modifier  Outer modifier — defaults fill the available width.
+ * Modern Bento Header matching the reference UI mockup:
+ * - Greeting mode (Home): 2-line minimalist hamburger menu on left + functional Premium badge on right; "Hello," + App Name.
+ * - Navigation mode (Subpages): Back arrow or hamburger on left + centered/aligned title.
  */
 @Composable
 fun AppHeader(
-    appName:   String,
-    tagline:   String,
-    logoIcon:  ImageVector,
-    actions:   List<HeaderAction> = emptyList(),
-    modifier:  Modifier = Modifier
+    appName: String = "MediaSaver",
+    tagline: String = "",
+    logoIcon: ImageVector = Icons.Default.WorkspacePremium,
+    actions: List<HeaderAction> = emptyList(),
+    modifier: Modifier = Modifier,
+    isGreetingMode: Boolean = true,
+    greetingPrefix: String = "Hello,",
+    isPremiumActive: Boolean = false,
+    onMenuClick: (() -> Unit)? = null,
+    onPremiumClick: (() -> Unit)? = null,
+    onAvatarClick: (() -> Unit)? = null,
+    onBackClick: (() -> Unit)? = null
 ) {
-    // ── Shimmer loop on the logo pill ────────────────────────────────────────
-    val inf = rememberInfiniteTransition(label = "logoShimmer")
-    val shimmerX by inf.animateFloat(
-        initialValue  = -120f,
-        targetValue   = 280f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(2800, easing = LinearEasing, delayMillis = 1200),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerX"
-    )
 
-    // Theme-driven, not fixed constants — see the comment above LogoGradient.
-    val headerBg     = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.92f)
-    val headerOnBg   = MaterialTheme.colorScheme.inverseOnSurface
-    val headerBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val isDark = isAppInDarkTheme()
+    val primaryTextColor = if (isDark) BentoTextPrimaryDark else BentoTextPrimaryLight
+    val secondaryTextColor = if (isDark) BentoTextSecondaryDark else BentoTextSecondaryLight
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(top = 8.dp, bottom = 4.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                // Glassmorphic dark card
-                .shadow(
-                    elevation    = 20.dp,
-                    shape        = RoundedCornerShape(20.dp),
-                    ambientColor = Color.Black.copy(alpha = 0.5f),
-                    spotColor    = Brand600.copy(alpha = 0.25f)
-                )
-                .clip(RoundedCornerShape(20.dp))
-                .background(headerBg)
-                .border(
-                    width = 1.dp,
-                    brush = Brush.linearGradient(
-                        listOf(
-                            headerOnBg.copy(alpha = 0.12f),
-                            headerBorder,
-                            headerOnBg.copy(alpha = 0.06f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(20.dp)
-                )
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-
-            // ── Logo pill ─────────────────────────────────────────────────────
-            Box(
-                modifier         = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(LogoGradient)
-                    // Shimmer sweep overlay
-                    .drawBehind {
-                        drawRect(
-                            brush  = Brush.linearGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.White.copy(alpha = 0.22f),
-                                    Color.Transparent
-                                ),
-                                start = Offset(shimmerX, 0f),
-                                end   = Offset(shimmerX + 80f, size.height)
-                            ),
-                            size   = this.size
-                        )
-                    },
-                contentAlignment = Alignment.Center
+        if (isGreetingMode) {
+            // ── Top Navigation Row: Menu icon on Left + Avatar on Right ───────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector        = logoIcon,
-                    contentDescription = null,
-                    tint               = Color.White,
-                    modifier           = Modifier.size(26.dp)
-                )
+                // Minimalist 2-line hamburger menu icon
+                val menuAction = onMenuClick ?: actions.firstOrNull()?.onClick
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { menuAction?.invoke() }
+                        ),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier.padding(start = 2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(22.dp)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(primaryTextColor)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(15.dp)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(primaryTextColor)
+                        )
+                    }
+                }
+
+                // Functional Premium Status Pill / Button on Right
+                val premiumAction = onPremiumClick ?: onAvatarClick ?: actions.firstOrNull {
+                    it.contentDescription.contains("Premium", ignoreCase = true)
+                }?.onClick
+
+                if (premiumAction != null) {
+                    val isPro = isPremiumActive
+                    val chipBg = if (isPro) {
+                        if (isDark) Color(0xFF2E2415) else Color(0xFFFEF3C7)
+                    } else {
+                        if (isDark) Color(0xFF251F1A) else BentoPeachContainer
+                    }
+                    val chipBorder = if (isPro) {
+                        Color(0xFFF59E0B)
+                    } else {
+                        Color(0xFFF59E0B).copy(alpha = 0.45f)
+                    }
+                    val accentColor = if (isPro) Color(0xFFD97706) else Color(0xFFB45309)
+
+                    Surface(
+                        modifier = Modifier
+                            .shadow(if (isPro) 4.dp else 2.dp, RoundedCornerShape(100.dp))
+                            .clip(RoundedCornerShape(100.dp))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { premiumAction.invoke() }
+                            ),
+                        shape = RoundedCornerShape(100.dp),
+                        color = chipBg,
+                        border = BorderStroke(1.2.dp, chipBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WorkspacePremium,
+                                contentDescription = if (isPro) "PRO Active" else "Unlock Premium",
+                                tint = accentColor,
+                                modifier = Modifier.size(19.dp)
+                            )
+                            Text(
+                                text = if (isPro) "PRO ACTIVE" else "GET PRO",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = accentColor,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
+                }
             }
 
-            // ── Title + tagline ───────────────────────────────────────────────
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text       = appName,
-                    style      = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color      = headerOnBg,
-                    letterSpacing = 0.2.sp
-                )
-                Spacer(Modifier.height(1.dp))
-                Text(
-                    text  = tagline,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = headerOnBg.copy(alpha = 0.65f),
-                    letterSpacing = 0.sp
-                )
-            }
+            Spacer(Modifier.height(18.dp))
 
-            // ── Trailing actions ──────────────────────────────────────────────
-            actions.forEach { action ->
-                HeaderIconButton(action)
-            }
-        }
-
-        // ── Subtle purple glow at the top-left corner ─────────────────────────
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .offset(x = (-10).dp, y = (-10).dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Brand400.copy(alpha = 0.18f), Color.Transparent),
-                        radius = 80f
-                    ),
-                    shape = CircleShape
-                )
-        )
-    }
-}
-
-// ── Action button data holder ─────────────────────────────────────────────────
-
-/**
- * Describes a single trailing icon action in [AppHeader].
- *
- * @param icon               Icon to display.
- * @param contentDescription Accessibility label.
- * @param badgeCount         When > 0, a red badge dot is drawn on the icon.
- * @param onClick            Invoked on tap.
- */
-data class HeaderAction(
-    val icon:               ImageVector,
-    val contentDescription: String,
-    val badgeCount:         Int  = 0,
-    val onClick:            () -> Unit
-)
-
-// ── Individual icon button ────────────────────────────────────────────────────
-
-@Composable
-private fun HeaderIconButton(action: HeaderAction) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val scale by animateFloatAsState(
-        targetValue   = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh),
-        label         = "iconScale"
-    )
-    val bgAlpha by animateFloatAsState(
-        targetValue   = if (isPressed) 0.18f else 0.10f,
-        animationSpec = tween(120),
-        label         = "iconBgAlpha"
-    )
-
-    val onHeaderBg = MaterialTheme.colorScheme.inverseOnSurface
-
-    Box(
-        modifier         = Modifier
-            .size(40.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(12.dp))
-            .background(onHeaderBg.copy(alpha = bgAlpha))
-            .clickable(interactionSource, indication = null, onClick = action.onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector        = action.icon,
-            contentDescription = action.contentDescription,
-            tint               = onHeaderBg.copy(alpha = 0.85f),
-            modifier           = Modifier.size(20.dp)
-        )
-
-        // Badge dot
-        if (action.badgeCount > 0) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .align(Alignment.TopEnd)
-                    .offset(x = 2.dp, y = (-2).dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFFF5370))  // ErrorRed
+            // ── Greeting Text: "Hello," + App Name / User Name ────────────────
+            Text(
+                text = greetingPrefix,
+                color = secondaryTextColor,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.2.sp
             )
+            Spacer(Modifier.height(2.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = appName,
+                    color = primaryTextColor,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp
+                )
+
+                // Optional subtle trailing action chips if provided
+                if (actions.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        actions.forEach { action ->
+                            BentoCircleBadge(
+                                icon = action.icon,
+                                contentDescription = action.contentDescription,
+                                size = 38.dp,
+                                iconSize = 18.dp,
+                                tint = BentoPurplePrimary,
+                                backgroundColor = if (isDark) BentoCardDark else BentoCardWhite,
+                                onClick = action.onClick
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            // ── Detail / Subpage Mode ─────────────────────────────────────────
+            val showSubpagePremium = onPremiumClick != null && appName != "Premium"
+
+            if (actions.isNotEmpty()) {
+                // Multi-control subpage (e.g. Downloads):
+                // Row 1: Left [Back / Menu]  <--- spacer --->  Right [GET PRO / PRO]
+                // Row 2: Left [Title + Subtitle]  <--- spacer --->  Right [Actions: Search, Clear]
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Top Navigation bar row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        if (onBackClick != null) {
+                            BentoCircleBadge(
+                                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                size = 42.dp,
+                                iconSize = 20.dp,
+                                backgroundColor = if (isDark) BentoCardDark else BentoCardWhite,
+                                onClick = onBackClick
+                            )
+                        } else if (onMenuClick != null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isDark) BentoCardDark else BentoCardWhite)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = onMenuClick
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(20.dp)
+                                            .height(2.5.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(primaryTextColor)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(14.dp)
+                                            .height(2.5.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(primaryTextColor)
+                                    )
+                                }
+                            }
+                        } else {
+                            Spacer(Modifier.width(1.dp))
+                        }
+
+                        if (showSubpagePremium) {
+                            val isPro = isPremiumActive
+                            val chipBg = if (isPro) {
+                                if (isDark) Color(0xFF2E2415) else Color(0xFFFEF3C7)
+                            } else {
+                                if (isDark) Color(0xFF251F1A) else BentoPeachContainer
+                            }
+                            val chipBorder = if (isPro) Color(0xFFF59E0B) else Color(0xFFF59E0B).copy(alpha = 0.45f)
+                            val accentColor = if (isPro) Color(0xFFD97706) else Color(0xFFB45309)
+
+                            Surface(
+                                modifier = Modifier
+                                    .shadow(if (isPro) 3.dp else 1.dp, RoundedCornerShape(100.dp))
+                                    .clip(RoundedCornerShape(100.dp))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = onPremiumClick
+                                    ),
+                                shape = RoundedCornerShape(100.dp),
+                                color = chipBg,
+                                border = BorderStroke(1.dp, chipBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.WorkspacePremium,
+                                        contentDescription = if (isPro) "PRO Active" else "Unlock Premium",
+                                        tint = accentColor,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Text(
+                                        text = if (isPro) "PRO" else "GET PRO",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = accentColor,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Title & Actions row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = appName,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = primaryTextColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            if (tagline.isNotBlank()) {
+                                Text(
+                                    text = tagline,
+                                    fontSize = 12.5.sp,
+                                    color = secondaryTextColor,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            actions.forEach { action ->
+                                BentoCircleBadge(
+                                    icon = action.icon,
+                                    contentDescription = action.contentDescription,
+                                    size = 40.dp,
+                                    iconSize = 20.dp,
+                                    tint = BentoPurplePrimary,
+                                    backgroundColor = if (isDark) BentoCardDark else BentoCardWhite,
+                                    onClick = action.onClick
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Single-row subpage mode (e.g. Settings, Details, Privacy, Terms)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (onBackClick != null) {
+                        BentoCircleBadge(
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            size = 42.dp,
+                            iconSize = 20.dp,
+                            backgroundColor = if (isDark) BentoCardDark else BentoCardWhite,
+                            onClick = onBackClick
+                        )
+                        Spacer(Modifier.width(16.dp))
+                    } else if (onMenuClick != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) BentoCardDark else BentoCardWhite)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onMenuClick
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(20.dp)
+                                        .height(2.5.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(primaryTextColor)
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .width(14.dp)
+                                        .height(2.5.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(primaryTextColor)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(16.dp))
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = appName,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryTextColor,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        if (tagline.isNotBlank()) {
+                            Text(
+                                text = tagline,
+                                fontSize = 12.sp,
+                                color = secondaryTextColor,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    if (showSubpagePremium) {
+                        val isPro = isPremiumActive
+                        val chipBg = if (isPro) {
+                            if (isDark) Color(0xFF2E2415) else Color(0xFFFEF3C7)
+                        } else {
+                            if (isDark) Color(0xFF251F1A) else BentoPeachContainer
+                        }
+                        val chipBorder = if (isPro) Color(0xFFF59E0B) else Color(0xFFF59E0B).copy(alpha = 0.45f)
+                        val accentColor = if (isPro) Color(0xFFD97706) else Color(0xFFB45309)
+
+                        Surface(
+                            modifier = Modifier
+                                .shadow(if (isPro) 3.dp else 1.dp, RoundedCornerShape(100.dp))
+                                .clip(RoundedCornerShape(100.dp))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onPremiumClick
+                                ),
+                            shape = RoundedCornerShape(100.dp),
+                            color = chipBg,
+                            border = BorderStroke(1.dp, chipBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WorkspacePremium,
+                                    contentDescription = if (isPro) "PRO Active" else "Unlock Premium",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Text(
+                                    text = if (isPro) "PRO" else "GET PRO",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = accentColor,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

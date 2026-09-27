@@ -1,17 +1,23 @@
 package com.mediasaver.app.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mediasaver.app.ui.components.AppHeader
+import com.mediasaver.app.ui.components.BentoSurfaceCard
+import com.mediasaver.app.ui.theme.BentoBackgroundLight
+import com.mediasaver.app.ui.theme.BentoCardWhite
+import com.mediasaver.app.ui.theme.BentoDarkCardBg
+import com.mediasaver.app.ui.theme.BentoLavenderContainer
+import com.mediasaver.app.ui.theme.BentoPurplePrimary
 
 private data class PolicySection(val heading: String, val body: String)
 
@@ -90,48 +96,85 @@ private val SECTIONS = listOf(
     )
 )
 
-/** Static, on-device-only privacy policy — see [SECTIONS] for the single source of truth. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Static, on-device-only privacy policy styled with modern Bento cards. */
 @Composable
 fun PrivacyPolicyScreen(onBack: () -> Unit) {
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Privacy Policy", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    Surface(onClick = onBack, modifier = Modifier.padding(8.dp).size(40.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { padding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BentoBackgroundLight)
+    ) {
         Column(
             modifier = Modifier
-                .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .statusBarsPadding()
+                .navigationBarsPadding()
         ) {
-            Text(
-                "This app has no server and no account system, so most of this policy is short: " +
-                    "we simply don't collect what we never receive. The one exception is ads " +
-                    "(Google AdMob) — see that section below for exactly what that involves.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            AppHeader(
+                appName = "Privacy Policy",
+                isGreetingMode = false,
+                onBackClick = onBack
             )
-            SECTIONS.forEach { section ->
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(section.heading, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text(section.body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Highlight hero card
+                BentoSurfaceCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = BentoLavenderContainer,
+                    cornerRadius = 24.dp
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text(
+                            text = "Zero-Server Guarantee",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BentoPurplePrimary
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "This app has no server and no account system: we simply don't collect what we never receive. All downloads process locally on your phone.",
+                            fontSize = 14.sp,
+                            color = BentoDarkCardBg.copy(alpha = 0.8f),
+                            lineHeight = 20.sp
+                        )
+                    }
                 }
+
+                // Policy detail cards
+                SECTIONS.forEach { section ->
+                    BentoSurfaceCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        backgroundColor = BentoCardWhite,
+                        cornerRadius = 24.dp
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text(
+                                text = section.heading,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoDarkCardBg
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = section.body,
+                                fontSize = 13.sp,
+                                color = Color(0xFF6B7280),
+                                lineHeight = 19.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
             }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }
+

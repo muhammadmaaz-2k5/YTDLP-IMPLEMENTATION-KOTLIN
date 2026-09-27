@@ -141,15 +141,21 @@ class ChaquopyYtDlpEngine(private val context: Context) : YtDlpEngine {
                 requiresMerge = f.optBoolean("requires_merge", false)
             )
         }
+        val tagsArray = json.optJSONArray("tags") ?: JSONArray()
+        val tagsList = (0 until tagsArray.length()).mapNotNull { i -> tagsArray.optString(i).takeIf { it.isNotBlank() } }
+        val description = if (json.isNull("description")) null else json.optString("description").takeIf { it.isNotBlank() }
+
         return MediaInfo(
             id              = json.optString("id", sourceUrl),
             sourceUrl       = sourceUrl,
             title           = json.optString("title", "Untitled"),
             thumbnailUrl    = json.optString("thumbnail", ""),
-            type            = if (sources.any { it.mimeType.startsWith("image/") }) MediaType.IMAGE else MediaType.VIDEO,
+            type            = if (sources.any { it.mimeType.startsWith("image/") && it.formatId != "thumbnail" }) MediaType.IMAGE else MediaType.VIDEO,
             platform        = platformFor(json.optString("extractor_key", "")),
             uploader        = if (json.isNull("uploader")) null else json.optString("uploader").takeIf { it.isNotBlank() },
             durationSeconds = if (json.isNull("duration")) null else json.optInt("duration"),
+            description     = description,
+            tags            = tagsList,
             sources         = sources
         )
     }
@@ -172,6 +178,9 @@ class ChaquopyYtDlpEngine(private val context: Context) : YtDlpEngine {
         extractorKey.contains("instagram", ignoreCase = true) -> MediaInfo.Platform.INSTAGRAM
         extractorKey.contains("youtube", ignoreCase = true)   -> MediaInfo.Platform.YOUTUBE
         extractorKey.contains("tiktok", ignoreCase = true)    -> MediaInfo.Platform.TIKTOK
+        extractorKey.contains("twitter", ignoreCase = true) || extractorKey.contains("x", ignoreCase = true) -> MediaInfo.Platform.TWITTER
+        extractorKey.contains("pinterest", ignoreCase = true) -> MediaInfo.Platform.PINTEREST
         else -> MediaInfo.Platform.GENERIC
     }
 }
+

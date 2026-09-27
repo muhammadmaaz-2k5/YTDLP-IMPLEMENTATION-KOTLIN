@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,12 +37,15 @@ import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
+import com.mediasaver.app.data.ads.AdEvent
+import com.mediasaver.app.data.ads.AdFormat
 import com.mediasaver.app.data.ads.AdUnitIds
 import com.mediasaver.app.data.ads.AdsController
 
 @Composable
 actual fun BannerAdSlot(modifier: Modifier) {
-    if (!AdsController.canShowAds()) return
+    val adsEnabled by AdsController.adsEnabled.collectAsState()
+    if (!adsEnabled || !AdsController.canShowAds()) return
     val context = LocalContext.current
     var loadFailed by remember { mutableStateOf(false) }
     if (loadFailed) return
@@ -60,8 +64,15 @@ actual fun BannerAdSlot(modifier: Modifier) {
 
     DisposableEffect(adView) {
         adView.adListener = object : AdListener() {
+            override fun onAdLoaded() {
+                AdsController.notifyEvent(AdEvent.AdLoaded(AdFormat.BANNER))
+            }
             override fun onAdFailedToLoad(error: LoadAdError) {
                 loadFailed = true
+                AdsController.notifyEvent(AdEvent.AdFailedToLoad(AdFormat.BANNER, error.message, error.code))
+            }
+            override fun onAdClicked() {
+                AdsController.notifyEvent(AdEvent.AdClicked(AdFormat.BANNER))
             }
         }
         adView.loadAd(AdRequest.Builder().build())
@@ -75,7 +86,8 @@ actual fun BannerAdSlot(modifier: Modifier) {
 
 @Composable
 actual fun NativeAdCard(modifier: Modifier) {
-    if (!AdsController.canShowAds()) return
+    val adsEnabled by AdsController.adsEnabled.collectAsState()
+    if (!adsEnabled || !AdsController.canShowAds()) return
     val context = LocalContext.current
     val density = LocalDensity.current
 
@@ -100,8 +112,15 @@ actual fun NativeAdCard(modifier: Modifier) {
                 nativeAd = ad
             }
             .withAdListener(object : AdListener() {
+                override fun onAdLoaded() {
+                    AdsController.notifyEvent(AdEvent.AdLoaded(AdFormat.NATIVE))
+                }
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loadFailed = true
+                    AdsController.notifyEvent(AdEvent.AdFailedToLoad(AdFormat.NATIVE, error.message, error.code))
+                }
+                override fun onAdClicked() {
+                    AdsController.notifyEvent(AdEvent.AdClicked(AdFormat.NATIVE))
                 }
             })
             // Landscape media (image/video) — native ads with a media asset typically clear a

@@ -1,8 +1,13 @@
 package com.mediasaver.app.ui.state
 
 import com.mediasaver.app.data.di.AppModule
+import com.mediasaver.app.data.platform.NetworkConnection
 import com.mediasaver.app.data.platform.currentTimeMs
+import com.mediasaver.app.data.platform.getNetworkConnection
+import com.mediasaver.app.data.platform.isOnline
+import com.mediasaver.app.data.platform.isOnCellular
 import com.mediasaver.app.data.platform.isOnWifi
+import com.mediasaver.app.data.platform.setAdsGloballyEnabled
 import com.mediasaver.app.data.platform.showRewardedAd
 import com.mediasaver.app.data.platform.showRewardedInterstitialAd
 import com.mediasaver.app.domain.model.AppSettings
@@ -69,6 +74,14 @@ class AppViewModel(
     /** Epoch-ms expiry of a rewarded-ad-earned temporary Premium unlock, or null if none/expired. */
     val temporaryUnlockExpiresAt: StateFlow<Long?> = _temporaryUnlockExpiresAt.asStateFlow()
 
+    private val _networkConnection = MutableStateFlow(getNetworkConnection())
+    /** Real-time network connection state (WIFI, CELLULAR, OFFLINE) */
+    val networkConnection: StateFlow<NetworkConnection> = _networkConnection.asStateFlow()
+
+    fun refreshNetworkStatus() {
+        _networkConnection.value = getNetworkConnection()
+    }
+
     // ── Private ───────────────────────────────────────────────────────────────
     private var downloadJob: Job? = null
     private var activeJobId: String? = null
@@ -92,7 +105,9 @@ class AppViewModel(
         }
 
         scope.launch {
-            _settings.value = settingsStore.load()
+            val loaded = settingsStore.load()
+            _settings.value = loaded
+            setAdsGloballyEnabled(loaded.adsEnabled)
         }
     }
 
@@ -106,9 +121,14 @@ class AppViewModel(
 
     fun setThemeMode(mode: ThemeMode) = updateSettings { it.copy(themeMode = mode) }
     fun setWifiOnlyDownloads(enabled: Boolean) = updateSettings { it.copy(wifiOnlyDownloads = enabled) }
+    fun setWarnOnCellular(enabled: Boolean) = updateSettings { it.copy(warnOnCellular = enabled) }
     fun setConfirmBeforeDelete(enabled: Boolean) = updateSettings { it.copy(confirmBeforeDelete = enabled) }
     fun setAskBeforeDownload(enabled: Boolean) = updateSettings { it.copy(askBeforeDownload = enabled) }
     fun setAutoDetectClipboard(enabled: Boolean) = updateSettings { it.copy(autoDetectClipboard = enabled) }
+    fun setAdsEnabled(enabled: Boolean) {
+        updateSettings { it.copy(adsEnabled = enabled) }
+        setAdsGloballyEnabled(enabled)
+    }
 
     // ── Navigation gating ─────────────────────────────────────────────────────
 
@@ -198,6 +218,14 @@ class AppViewModel(
         val trimmed = url.trim()
         if (trimmed.isBlank()) return
         if (_uiState.value is AppUiState.Downloading) return
+        refreshNetworkStatus()
+        if (!isOnline()) {
+            _uiState.value = AppUiState.Error(
+                message = "You're currently offline. Connect to Wi-Fi or mobile network to fetch media.",
+                canRetry = true
+            )
+            return
+        }
         lastUrl = trimmed
         _uiState.value = AppUiState.Loading
 
@@ -205,12 +233,12 @@ class AppViewModel(
             try {
                 val results = repository.extractMedia(trimmed)
                 _uiState.value = if (results.isEmpty())
-                    AppUiState.Error("No media found at this URL.", canRetry = false)
+                    AppUiState.Error("No downloadable media found at this URL.", canRetry = false)
                 else
                     AppUiState.Preview(results)
             } catch (e: Exception) {
                 _uiState.value = AppUiState.Error(
-                    message  = e.message ?: "Failed to extract media. Please check the URL.",
+                    message  = com.mediasaver.app.domain.util.SmartUrlEngine.translateErrorMessage(e.message),
                     canRetry = true
                 )
             }
@@ -225,9 +253,17 @@ class AppViewModel(
      * Transitions: Preview → Downloading → Success | Error
      */
     fun onDownloadClick(mediaInfo: MediaInfo, source: MediaSource) {
+        refreshNetworkStatus()
+        if (!isOnline()) {
+            _uiState.value = AppUiState.Error(
+                message = "You're currently offline. Connect to Wi-Fi or mobile network to download.",
+                canRetry = true
+            )
+            return
+        }
         if (_settings.value.wifiOnlyDownloads && !isOnWifi()) {
             _uiState.value = AppUiState.Error(
-                message  = "Wi-Fi only is on in Settings, and you're not on Wi-Fi right now.",
+                message  = "Wi-Fi only is enabled in Settings, and you're currently on mobile data. Please switch to Wi-Fi or disable Wi-Fi only in Settings.",
                 canRetry = false
             )
             return
@@ -241,21 +277,40 @@ class AppViewModel(
         downloadJob = scope.launch {
             downloadScheduler.observeStatus(jobId).collect { status ->
                 when (status) {
-                    is DownloadStatus.Queued      -> _uiState.value = AppUiState.Downloading(0, "…", mediaInfo)
+                    is DownloadStatus.Queued      -> _uiState.value = AppUiState.Downloading(
+                        progressPercent = 0,
+                        speedFormatted = "Connecting…",
+                        mediaInfo = mediaInfo,
+                        bytesDownloaded = 0L,
+                        totalBytes = 0L,
+                        isMerging = false
+                    )
                     is DownloadStatus.Downloading -> _uiState.value = AppUiState.Downloading(
-                        status.progressPercent, status.speedFormatted, mediaInfo
+                        progressPercent = status.progressPercent,
+                        speedFormatted = status.speedFormatted,
+                        mediaInfo = mediaInfo,
+                        bytesDownloaded = status.bytesDownloaded,
+                        totalBytes = status.totalBytes,
+                        isMerging = false
                     )
                     is DownloadStatus.Merging     -> _uiState.value = AppUiState.Downloading(
-                        100, "Merging…", mediaInfo
+                        progressPercent = 100,
+                        speedFormatted = "Merging tracks…",
+                        mediaInfo = mediaInfo,
+                        bytesDownloaded = 0L,
+                        totalBytes = 0L,
+                        isMerging = true
                     )
                     is DownloadStatus.Done -> {
                         _uiState.value = AppUiState.Success(status.filePath, mediaInfo)
                         downloadJob?.cancel() // terminal — stop observing this job's (long-lived) WorkInfo flow
                     }
                     is DownloadStatus.Failed -> {
-                        _uiState.value = AppUiState.Error(status.reason, canRetry = true)
+                        val friendlyError = com.mediasaver.app.domain.util.SmartUrlEngine.translateErrorMessage(status.reason)
+                        _uiState.value = AppUiState.Error(friendlyError, canRetry = true)
                         downloadJob?.cancel()
                     }
+
                     is DownloadStatus.Cancelled -> {
                         _uiState.value = AppUiState.Preview(listOf(mediaInfo))
                         downloadJob?.cancel()

@@ -2,34 +2,28 @@ package com.mediasaver.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mediasaver.app.data.platform.openApp
-import com.mediasaver.app.ui.theme.FacebookChip
-import com.mediasaver.app.ui.theme.InstagramChipEnd
-import com.mediasaver.app.ui.theme.InstagramChipMid
-import com.mediasaver.app.ui.theme.InstagramChipStart
-import com.mediasaver.app.ui.theme.PinterestChip
-import com.mediasaver.app.ui.theme.XChip
-import com.mediasaver.app.ui.theme.YouTubeChip
+import com.mediasaver.app.ui.theme.*
 import compose.icons.SimpleIcons
 import compose.icons.simpleicons.Facebook
 import compose.icons.simpleicons.Instagram
@@ -37,90 +31,280 @@ import compose.icons.simpleicons.Pinterest
 import compose.icons.simpleicons.Twitter
 import compose.icons.simpleicons.Youtube
 
-private data class PlatformChip(
-    val label: String,
-    val background: Brush,
+data class PlatformData(
+    val id: String,
+    val name: String,
+    val subtitle: String,
     val icon: ImageVector,
+    val iconColor: Color,
     val packageName: String,
     val webFallbackUrl: String
 )
 
-private val PLATFORM_CHIPS = listOf(
-    PlatformChip(
-        label          = "YouTube",
-        background     = Brush.linearGradient(listOf(YouTubeChip, YouTubeChip)),
-        icon           = SimpleIcons.Youtube,
-        packageName    = "com.google.android.youtube",
-        webFallbackUrl = "https://www.youtube.com"
-    ),
-    PlatformChip(
-        label          = "Instagram",
-        background     = Brush.linearGradient(listOf(InstagramChipStart, InstagramChipMid, InstagramChipEnd)),
-        icon           = SimpleIcons.Instagram,
-        packageName    = "com.instagram.android",
-        webFallbackUrl = "https://www.instagram.com"
-    ),
-    PlatformChip(
-        label          = "Facebook",
-        background     = Brush.linearGradient(listOf(FacebookChip, FacebookChip)),
-        icon           = SimpleIcons.Facebook,
-        packageName    = "com.facebook.katana",
-        webFallbackUrl = "https://www.facebook.com"
-    ),
-    PlatformChip(
-        // The bundled brand-icon pack predates the Twitter → X rebrand, so this renders the
-        // legacy bird mark; the visible label still says "X" to match the app's current name.
-        label          = "X",
-        background     = Brush.linearGradient(listOf(XChip, XChip)),
-        icon           = SimpleIcons.Twitter,
-        packageName    = "com.twitter.android",
-        webFallbackUrl = "https://x.com"
-    ),
-    PlatformChip(
-        label          = "Pinterest",
-        background     = Brush.linearGradient(listOf(PinterestChip, PinterestChip)),
-        icon           = SimpleIcons.Pinterest,
-        packageName    = "com.pinterest",
-        webFallbackUrl = "https://www.pinterest.com"
-    )
+private val YOUTUBE = PlatformData(
+    id = "youtube",
+    name = "YouTube",
+    subtitle = "4K, 1080p, MP3",
+    icon = SimpleIcons.Youtube,
+    iconColor = Color(0xFFFF0000),
+    packageName = "com.google.android.youtube",
+    webFallbackUrl = "https://www.youtube.com"
 )
 
-/** Row of rounded-square platform icons — tapping one opens that app (or its website as fallback). */
+private val INSTAGRAM = PlatformData(
+    id = "instagram",
+    name = "Instagram",
+    subtitle = "Reels & Stories",
+    icon = SimpleIcons.Instagram,
+    iconColor = Color(0xFFE1306C),
+    packageName = "com.instagram.android",
+    webFallbackUrl = "https://www.instagram.com"
+)
+
+private val FACEBOOK = PlatformData(
+    id = "facebook",
+    name = "Facebook",
+    subtitle = "Public Videos",
+    icon = SimpleIcons.Facebook,
+    iconColor = Color(0xFF1877F2),
+    packageName = "com.facebook.katana",
+    webFallbackUrl = "https://www.facebook.com"
+)
+
+private val TWITTER = PlatformData(
+    id = "twitter",
+    name = "X / Twitter",
+    subtitle = "Clips & Media",
+    icon = SimpleIcons.Twitter,
+    iconColor = Color(0xFF111218),
+    packageName = "com.twitter.android",
+    webFallbackUrl = "https://x.com"
+)
+
+private val PINTEREST = PlatformData(
+    id = "pinterest",
+    name = "Pinterest",
+    subtitle = "Pins & Videos",
+    icon = SimpleIcons.Pinterest,
+    iconColor = Color(0xFFE60023),
+    packageName = "com.pinterest",
+    webFallbackUrl = "https://www.pinterest.com"
+)
+
+/**
+ * Bento Grid of supported platforms matching the "Your Rooms" section in the reference mockup:
+ * - Left: Featured tall Bento card in pastel sage (like "Living Room").
+ * - Right: Two stacked Bento cards in pastel lavender & sky blue (like "Bed Room" & "Office Room").
+ */
 @Composable
 fun PlatformChipsRow(modifier: Modifier = Modifier) {
-    Row(
-        modifier              = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        PLATFORM_CHIPS.forEach { chip ->
-            PlatformChipItem(chip)
-        }
-    }
-}
-
-@Composable
-private fun PlatformChipItem(chip: PlatformChip) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(chip.background)
-                .clickable { openApp(chip.packageName, chip.webFallbackUrl) },
-            contentAlignment = Alignment.Center
+        // Section Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                imageVector        = chip.icon,
-                contentDescription = chip.label,
-                tint               = Color.White,
-                modifier           = Modifier.size(22.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Supported ",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = BentoTextPrimaryLight
+                )
+                Text(
+                    text = "Sites",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = BentoTextPrimaryLight
+                )
+            }
+            Text(
+                text = "Tap to open",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = BentoTextSecondaryLight
             )
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text  = chip.label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+
+        // Bento Grid Layout: 1 Featured Tall Card on Left + 2 Stacked Cards on Right
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ── Featured Tall Bento Card (Sage Green, like "Living Room") ─────
+            BentoSurfaceCard(
+                modifier = Modifier
+                    .weight(1.05f)
+                    .height(180.dp),
+                cornerRadius = 28.dp,
+                backgroundColor = BentoSageContainer,
+                borderColor = Color.Transparent,
+                onClick = { openApp(YOUTUBE.packageName, YOUTUBE.webFallbackUrl) }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Elevated White Circle Badge
+                    BentoCircleBadge(
+                        icon = YOUTUBE.icon,
+                        tint = YOUTUBE.iconColor,
+                        size = 46.dp,
+                        iconSize = 22.dp,
+                        elevation = 3.dp
+                    )
+
+                    Column {
+                        Text(
+                            text = YOUTUBE.name,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BentoSageText
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = YOUTUBE.subtitle,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = BentoSageSubtext
+                        )
+                    }
+                }
+            }
+
+            // ── Stacked Bento Cards on Right (Lavender & Sky) ─────────────────
+            Column(
+                modifier = Modifier
+                    .weight(1.15f)
+                    .height(180.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Stacked Card 1: Instagram (Lavender)
+                BentoSurfaceCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    cornerRadius = 24.dp,
+                    backgroundColor = BentoLavenderContainer,
+                    borderColor = Color.Transparent,
+                    onClick = { openApp(INSTAGRAM.packageName, INSTAGRAM.webFallbackUrl) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        BentoCircleBadge(
+                            icon = INSTAGRAM.icon,
+                            tint = INSTAGRAM.iconColor,
+                            size = 38.dp,
+                            iconSize = 18.dp,
+                            elevation = 2.dp
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = INSTAGRAM.name,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoLavenderText
+                            )
+                            Text(
+                                text = INSTAGRAM.subtitle,
+                                fontSize = 11.sp,
+                                color = BentoLavenderSubtext
+                            )
+                        }
+                    }
+                }
+
+                // Stacked Card 2: Facebook (Sky Blue)
+                BentoSurfaceCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    cornerRadius = 24.dp,
+                    backgroundColor = BentoSkyContainer,
+                    borderColor = Color.Transparent,
+                    onClick = { openApp(FACEBOOK.packageName, FACEBOOK.webFallbackUrl) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        BentoCircleBadge(
+                            icon = FACEBOOK.icon,
+                            tint = FACEBOOK.iconColor,
+                            size = 38.dp,
+                            iconSize = 18.dp,
+                            elevation = 2.dp
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = FACEBOOK.name,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoSkyText
+                            )
+                            Text(
+                                text = FACEBOOK.subtitle,
+                                fontSize = 11.sp,
+                                color = BentoSkySubtext
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Additional Quick Platform Row (Twitter / Pinterest / More)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            listOf(TWITTER, PINTEREST).forEach { item ->
+                BentoSurfaceCard(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(60.dp),
+                    cornerRadius = 20.dp,
+                    backgroundColor = BentoCardWhite,
+                    elevation = 2.dp,
+                    onClick = { openApp(item.packageName, item.webFallbackUrl) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        BentoCircleBadge(
+                            icon = item.icon,
+                            tint = item.iconColor,
+                            size = 34.dp,
+                            iconSize = 16.dp,
+                            elevation = 1.dp
+                        )
+                        Text(
+                            text = item.name,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = BentoTextPrimaryLight
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -14,7 +14,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -22,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -36,6 +40,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.mediasaver.app.data.ads.AdsController
 import com.mediasaver.app.domain.model.ThemeMode
+import com.mediasaver.app.ui.components.BentoDrawerContent
 import com.mediasaver.app.ui.screens.DownloadDetailScreen
 import com.mediasaver.app.ui.screens.DownloadsScreen
 import com.mediasaver.app.ui.screens.HomeScreen
@@ -46,6 +51,7 @@ import com.mediasaver.app.ui.screens.SettingsScreen
 import com.mediasaver.app.ui.screens.TermsOfServiceScreen
 import com.mediasaver.app.ui.state.AppViewModel
 import com.mediasaver.app.ui.theme.AppTheme
+import kotlinx.coroutines.launch
 
 private object Routes {
     const val ONBOARDING = "onboarding"
@@ -151,6 +157,17 @@ fun AppRoot(
         }
 
         val navController = rememberNavController()
+        val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+        val coroutineScope = rememberCoroutineScope()
+
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = navBackStackEntry?.destination?.route ?: Routes.HOME
+
+        val history by viewModel.history.collectAsState()
+        val activePlan by viewModel.activePlan.collectAsState()
+        val temporaryUnlockExpiresAt by viewModel.temporaryUnlockExpiresAt.collectAsState()
+        val isPremiumActive = activePlan != null || temporaryUnlockExpiresAt != null
+        val networkConnection by viewModel.networkConnection.collectAsState()
 
         // Re-fires on every distinct shared URL, not just once — covers both cold start and a
         // second share arriving via onNewIntent while the app is already running.
@@ -162,107 +179,144 @@ fun AppRoot(
             }
         }
 
-        // A subtle fade + slide on every navigation event — tab switches and push/pop alike —
-        // instead of the default instant cut. Kept short (200ms) and low-amplitude so it reads
-        // as polish, not something the user has to wait through.
-        NavHost(
-            navController      = navController,
-            startDestination   = resolvedStart,
-            enterTransition    = { fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 10 } },
-            exitTransition     = { fadeOut(tween(160)) },
-            popEnterTransition = { fadeIn(tween(220)) },
-            popExitTransition  = { fadeOut(tween(160)) + slideOutHorizontally(tween(160)) { it / 10 } }
-        ) {
-            composable(Routes.ONBOARDING) {
-                OnboardingScreen(
-                    onFinished = {
-                        viewModel.markOnboardingCompleted()
-                        navController.navigate(Routes.HOME) {
-                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = currentRoute != Routes.ONBOARDING,
+            drawerContent = {
+                BentoDrawerContent(
+                    currentRoute = currentRoute,
+                    downloadCount = history.size,
+                    isPremiumActive = isPremiumActive,
+                    onNavigate = { targetRoute ->
+                        coroutineScope.launch { drawerState.close() }
+                        when (targetRoute) {
+                            Routes.HOME -> navController.navigateTopLevel(Routes.HOME)
+                            Routes.DOWNLOADS -> navController.navigateTopLevel(Routes.DOWNLOADS)
+                            Routes.PREMIUM -> navController.navigateTopLevel(Routes.PREMIUM)
+                            Routes.SETTINGS -> navController.navigateTopLevel(Routes.SETTINGS)
+                            else -> navController.navigate(targetRoute)
                         }
+                    },
+                    onOpenPrivacy = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate(Routes.PRIVACY)
+                    },
+                    onOpenTerms = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate(Routes.TERMS)
+                    },
+                    onClose = {
+                        coroutineScope.launch { drawerState.close() }
                     }
                 )
             }
-            composable(Routes.HOME) {
-                HomeScreen(
-                    viewModel           = viewModel,
-                    onOpenDownloads     = { navController.navigateTopLevel(Routes.DOWNLOADS) },
-                    onOpenPremium       = { navController.navigateTopLevel(Routes.PREMIUM) },
-                    onOpenPrivacyPolicy = { navController.navigate(Routes.PRIVACY) },
-                    onOpenSettings      = { navController.navigateTopLevel(Routes.SETTINGS) },
-                    resumeSignal        = resumeSignal
-                )
-            }
-            composable(Routes.DOWNLOADS) {
-                val history by viewModel.history.collectAsState()
-                DownloadsScreen(
-                    records             = history,
-                    confirmBeforeDelete = settings.confirmBeforeDelete,
-                    onBack              = { navController.navigateTopLevel(Routes.HOME) },
-                    onOpenDetail        = { record -> navController.navigate(Routes.detail(record.id)) },
-                    onDeleteConfirmed   = { record -> viewModel.deleteRecord(record) },
-                    onStartNewDownload  = { navController.navigateTopLevel(Routes.HOME) },
-                    onOpenPremium       = { navController.navigateTopLevel(Routes.PREMIUM) },
-                    onOpenSettings      = { navController.navigateTopLevel(Routes.SETTINGS) }
-                )
-            }
-            composable(Routes.SETTINGS) {
-                SettingsScreen(
-                    settings                    = settings,
-                    onThemeModeChange           = viewModel::setThemeMode,
-                    onWifiOnlyChange            = viewModel::setWifiOnlyDownloads,
-                    onAskBeforeDownloadChange   = viewModel::setAskBeforeDownload,
-                    onConfirmBeforeDeleteChange = viewModel::setConfirmBeforeDelete,
-                    onAutoDetectClipboardChange = viewModel::setAutoDetectClipboard,
-                    onOpenPrivacyPolicy         = { navController.navigate(Routes.PRIVACY) },
-                    onOpenTerms                 = { navController.navigate(Routes.TERMS) },
-                    onOpenHome                  = { navController.navigateTopLevel(Routes.HOME) },
-                    onOpenDownloads             = { navController.navigateTopLevel(Routes.DOWNLOADS) },
-                    onOpenPremium               = { navController.navigateTopLevel(Routes.PREMIUM) },
-                    onOpenAdPrivacyOptions      = if (AdsController.isPrivacyOptionsRequired()) {
-                        { AdsController.openPrivacyOptionsForm(activity) {} }
-                    } else null
-                )
-            }
-            composable(Routes.PREMIUM) {
-                val activePlan by viewModel.activePlan.collectAsState()
-                val temporaryUnlockExpiresAt by viewModel.temporaryUnlockExpiresAt.collectAsState()
-                PremiumScreen(
-                    activePlan               = activePlan,
-                    temporaryUnlockExpiresAt = temporaryUnlockExpiresAt,
-                    onBack                   = { navController.navigateTopLevel(Routes.HOME) },
-                    onSelectPlan             = viewModel::selectPlan,
-                    onWatchRewardedAd        = viewModel::watchRewardedAdForPremium,
-                    onWatchRewardedInterstitialAd = viewModel::watchRewardedInterstitialForPremium,
-                    onOpenHome               = { navController.navigateTopLevel(Routes.HOME) },
-                    onOpenDownloads          = { navController.navigateTopLevel(Routes.DOWNLOADS) },
-                    onOpenSettings           = { navController.navigateTopLevel(Routes.SETTINGS) }
-                )
-            }
-            composable(Routes.PRIVACY) {
-                PrivacyPolicyScreen(onBack = { navController.popBackStack() })
-            }
-            composable(Routes.TERMS) {
-                TermsOfServiceScreen(onBack = { navController.popBackStack() })
-            }
-            composable(
-                route     = Routes.DETAIL,
-                arguments = listOf(navArgument("recordId") { type = NavType.StringType })
-            ) { entry ->
-                val recordId = entry.arguments?.getString("recordId")
-                val history by viewModel.history.collectAsState()
-                val record = history.firstOrNull { it.id == recordId }
-                if (record != null) {
-                    DownloadDetailScreen(
-                        record              = record,
-                        confirmBeforeDelete = settings.confirmBeforeDelete,
-                        onBack              = { navController.popBackStack() },
-                        onDelete            = { r -> viewModel.deleteRecord(r) },
-                        onRename            = { newTitle, onResult -> viewModel.renameRecord(record.id, newTitle, onResult) }
+        ) {
+            // A subtle fade + slide on every navigation event — tab switches and push/pop alike —
+            // instead of the default instant cut. Kept short (200ms) and low-amplitude so it reads
+            // as polish, not something the user has to wait through.
+            NavHost(
+                navController      = navController,
+                startDestination   = resolvedStart,
+                enterTransition    = { fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 10 } },
+                exitTransition     = { fadeOut(tween(160)) },
+                popEnterTransition = { fadeIn(tween(220)) },
+                popExitTransition  = { fadeOut(tween(160)) + slideOutHorizontally(tween(160)) { it / 10 } }
+            ) {
+                composable(Routes.ONBOARDING) {
+                    OnboardingScreen(
+                        onFinished = {
+                            viewModel.markOnboardingCompleted()
+                            navController.navigate(Routes.HOME) {
+                                popUpTo(Routes.ONBOARDING) { inclusive = true }
+                            }
+                        }
                     )
-                } else {
-                    // Record was deleted (or app restarted mid-navigation) — just back out.
-                    LaunchedEffect(Unit) { navController.popBackStack() }
+                }
+                composable(Routes.HOME) {
+                    HomeScreen(
+                        viewModel           = viewModel,
+                        onOpenDownloads     = { navController.navigateTopLevel(Routes.DOWNLOADS) },
+                        onOpenPremium       = { navController.navigateTopLevel(Routes.PREMIUM) },
+                        onOpenPrivacyPolicy = { navController.navigate(Routes.PRIVACY) },
+                        onOpenSettings      = { navController.navigateTopLevel(Routes.SETTINGS) },
+                        onOpenDrawer        = { coroutineScope.launch { drawerState.open() } },
+                        resumeSignal        = resumeSignal
+                    )
+                }
+                composable(Routes.DOWNLOADS) {
+                    DownloadsScreen(
+                        records             = history,
+                        confirmBeforeDelete = settings.confirmBeforeDelete,
+                        onBack              = null,
+                        onOpenDrawer        = { coroutineScope.launch { drawerState.open() } },
+                        onOpenPremium       = { navController.navigateTopLevel(Routes.PREMIUM) },
+                        isPremiumActive     = isPremiumActive,
+                        networkConnection   = networkConnection,
+                        onRetryConnection   = viewModel::refreshNetworkStatus,
+                        onOpenDetail        = { record -> navController.navigate(Routes.detail(record.id)) },
+                        onDeleteConfirmed   = { record -> viewModel.deleteRecord(record) },
+                        onStartNewDownload  = { navController.navigateTopLevel(Routes.HOME) },
+                        onClearAll          = viewModel::clearHistory
+                    )
+                }
+                composable(Routes.SETTINGS) {
+                    SettingsScreen(
+                        settings                    = settings,
+                        onThemeModeChange           = viewModel::setThemeMode,
+                        onWifiOnlyChange            = viewModel::setWifiOnlyDownloads,
+                        onWarnOnCellularChange      = viewModel::setWarnOnCellular,
+                        onAskBeforeDownloadChange   = viewModel::setAskBeforeDownload,
+                        onConfirmBeforeDeleteChange = viewModel::setConfirmBeforeDelete,
+                        onAutoDetectClipboardChange = viewModel::setAutoDetectClipboard,
+                        onAdsEnabledChange          = viewModel::setAdsEnabled,
+                        onOpenPrivacyPolicy         = { navController.navigate(Routes.PRIVACY) },
+                        onOpenTerms                 = { navController.navigate(Routes.TERMS) },
+                        onOpenHome                  = null,
+                        onOpenDownloads             = { navController.navigateTopLevel(Routes.DOWNLOADS) },
+                        onOpenDrawer                = { coroutineScope.launch { drawerState.open() } },
+                        onOpenPremium               = { navController.navigateTopLevel(Routes.PREMIUM) },
+                        isPremiumActive             = isPremiumActive,
+                        networkConnection           = networkConnection,
+                        onOpenAdPrivacyOptions      = if (AdsController.isPrivacyOptionsRequired()) {
+                            { AdsController.openPrivacyOptionsForm(activity) {} }
+                        } else null
+                    )
+                }
+                composable(Routes.PREMIUM) {
+                    PremiumScreen(
+                        activePlan               = activePlan,
+                        temporaryUnlockExpiresAt = temporaryUnlockExpiresAt,
+                        onBack                   = null,
+                        onOpenDrawer             = { coroutineScope.launch { drawerState.open() } },
+                        onSelectPlan             = viewModel::selectPlan,
+                        onWatchRewardedAd        = viewModel::watchRewardedAdForPremium,
+                        onWatchRewardedInterstitialAd = viewModel::watchRewardedInterstitialForPremium
+                    )
+                }
+                composable(Routes.PRIVACY) {
+                    PrivacyPolicyScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.TERMS) {
+                    TermsOfServiceScreen(onBack = { navController.popBackStack() })
+                }
+                composable(
+                    route     = Routes.DETAIL,
+                    arguments = listOf(navArgument("recordId") { type = NavType.StringType })
+                ) { entry ->
+                    val recordId = entry.arguments?.getString("recordId")
+                    val record = history.firstOrNull { it.id == recordId }
+                    if (record != null) {
+                        DownloadDetailScreen(
+                            record              = record,
+                            confirmBeforeDelete = settings.confirmBeforeDelete,
+                            onBack              = { navController.popBackStack() },
+                            onDelete            = { r -> viewModel.deleteRecord(r) },
+                            onRename            = { newTitle, onResult -> viewModel.renameRecord(record.id, newTitle, onResult) }
+                        )
+                    } else {
+                        // Record was deleted (or app restarted mid-navigation) — just back out.
+                        LaunchedEffect(Unit) { navController.popBackStack() }
+                    }
                 }
             }
         }

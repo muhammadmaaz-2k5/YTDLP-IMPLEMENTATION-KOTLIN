@@ -1,31 +1,35 @@
 package com.mediasaver.app.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mediasaver.app.ui.theme.*
 
 /**
- * Always-visible URL input bar at the top of the SPA.
- *
- * @param url         Current text field value (hoisted state).
- * @param onUrlChange Called on every keystroke.
- * @param onSubmit    Called when user taps Submit or presses Enter.
- * @param isLoading   Shows a spinner on the submit button (extraction in progress).
- * @param enabled     False disables input entirely without the spinner — used while a download
- *                    is active, since there's no queue yet and a second submit would orphan it.
+ * Reusable Bento URL input pill matching the clean elevated aesthetic of the reference UI mockup.
  */
 @Composable
 fun UrlInputBar(
@@ -37,84 +41,131 @@ fun UrlInputBar(
     modifier: Modifier = Modifier
 ) {
     val clipboard = LocalClipboardManager.current
+    val isDark = isAppInDarkTheme()
+    val bgColor = if (isDark) BentoCardDark else BentoCardWhite
+    val borderColor = if (isDark) BentoBorderDark else BentoBorderLight
+    val textPrimary = if (isDark) BentoTextPrimaryDark else BentoTextPrimaryLight
+    val textSecondary = if (isDark) BentoTextSecondaryDark else BentoTextSecondaryLight
 
-    Surface(
-        modifier  = modifier.fillMaxWidth(),
-        color     = MaterialTheme.colorScheme.surfaceVariant,
-        shape     = MaterialTheme.shapes.extraLarge
+    BentoSurfaceCard(
+        modifier = modifier.fillMaxWidth(),
+        cornerRadius = 100.dp,
+        elevation = 3.dp,
+        backgroundColor = bgColor,
+        borderColor = borderColor
     ) {
         Row(
-            modifier            = Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment   = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Text field
+            // Leading Link icon in subtle circle
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(if (isDark) Color(0xFF232532) else Color(0xFFF1F3F9)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Link,
+                    contentDescription = null,
+                    tint = BentoPurplePrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Main Text Field
             OutlinedTextField(
-                value            = url,
-                onValueChange    = onUrlChange,
-                enabled          = enabled,
-                modifier         = Modifier.weight(1f),
-                leadingIcon      = {
-                    Icon(
-                        imageVector        = Icons.Default.Search,
-                        contentDescription = null,
-                        tint               = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                placeholder      = {
+                value = url,
+                onValueChange = onUrlChange,
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+                placeholder = {
                     Text(
-                        "Paste your link here or auto-detect",
-                        style    = MaterialTheme.typography.bodyMedium,
-                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
+                        text = "Paste link here...",
+                        color = textSecondary,
+                        fontSize = 14.sp
                     )
                 },
-                singleLine       = true,
-                keyboardOptions  = KeyboardOptions(
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Uri,
-                    imeAction    = ImeAction.Go
+                    imeAction = ImeAction.Go
                 ),
-                keyboardActions  = KeyboardActions(onGo = {
+                keyboardActions = KeyboardActions(onGo = {
                     if (url.isNotBlank() && !isLoading && enabled) onSubmit(url)
                 }),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor      = Color.Transparent,
-                    unfocusedBorderColor    = Color.Transparent,
-                    focusedContainerColor   = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedTextColor = textPrimary,
+                    unfocusedTextColor = textPrimary
                 ),
-                shape = MaterialTheme.shapes.extraLarge
+                shape = RoundedCornerShape(100.dp)
             )
 
-            // Paste (when empty) / submit (when filled) button
+            // Clear button if URL is non-empty
+            if (url.isNotBlank() && !isLoading && enabled) {
+                IconButton(
+                    onClick = { onUrlChange("") },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Clear input",
+                        tint = textSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+
+                }
+                Spacer(Modifier.width(4.dp))
+            }
+
+            // Trailing action button: Paste (when empty) / Submit (when URL entered)
             FilledIconButton(
-                onClick  = {
+                onClick = {
                     if (url.isBlank()) {
-                        val text = clipboard.getText()?.text ?: ""
-                        if (text.isNotBlank()) onUrlChange(text)
+                        val raw = clipboard.getText()?.text ?: ""
+                        if (raw.isNotBlank()) {
+                            val cleaned = com.mediasaver.app.domain.util.SmartUrlEngine.extractAndCleanUrl(raw) ?: raw.trim()
+                            onUrlChange(cleaned)
+                            if (cleaned.isNotBlank()) onSubmit(cleaned)
+                        }
                     } else {
-                        onSubmit(url)
+                        val cleaned = com.mediasaver.app.domain.util.SmartUrlEngine.extractAndCleanUrl(url) ?: url.trim()
+                        onSubmit(cleaned)
                     }
                 },
-                enabled  = !isLoading && enabled,
-                modifier = Modifier.size(48.dp)
+                enabled = !isLoading && enabled,
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = BentoPurplePrimary,
+                    contentColor = Color.White,
+                    disabledContainerColor = BentoPurplePrimary.copy(alpha = 0.5f)
+                )
             ) {
                 if (isLoading) {
                     LoaderWidget(
-                        variant  = LoaderVariant.ThinArc,
-                        size     = 20.dp,
+                        variant = LoaderVariant.ThinArc,
+                        size = 20.dp,
                         modifier = Modifier
                     )
                 } else {
                     Icon(
-                        imageVector        = if (url.isBlank()) Icons.Default.ContentPaste else Icons.Default.Send,
+                        imageVector = if (url.isBlank()) Icons.Default.ContentPaste else Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = if (url.isBlank()) "Paste from clipboard" else "Fetch media",
-                        modifier           = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
         }
     }
 }
+

@@ -7,13 +7,18 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.SdStorage
@@ -32,19 +37,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mediasaver.app.data.platform.NetworkConnection
 import com.mediasaver.app.data.platform.dayBucket
 import com.mediasaver.app.data.platform.formatDayHeader
 import com.mediasaver.app.domain.model.DownloadOutcome
 import com.mediasaver.app.domain.model.DownloadRecord
-import com.mediasaver.app.ui.components.AppBottomBarWithAd
-import com.mediasaver.app.ui.components.AppHeader
-import com.mediasaver.app.ui.components.DownloadRow
-import com.mediasaver.app.ui.components.HeaderAction
-import com.mediasaver.app.ui.components.NativeAdCard
-import com.mediasaver.app.ui.theme.HeroGradient
+import com.mediasaver.app.ui.components.*
+import com.mediasaver.app.ui.theme.*
 
 private enum class HistoryFilter(val label: String) {
-    ALL("All"), COMPLETE("Complete"), FAILED("Failed")
+    ALL("All"), VIDEOS("Videos"), AUDIO("Audio"), COMPLETE("Complete"), FAILED("Failed")
 }
 
 private enum class SortOrder(val label: String) {
@@ -58,32 +61,21 @@ private fun formatAggregateBytes(bytes: Long): String = when {
     else                    -> "$bytes B"
 }
 
-/**
- * Full-screen download history — searchable, filterable (All / Complete / Failed), sortable,
- * grouped by calendar date. Header, stat strip and row cards match the same glass/gradient
- * visual language as [HomeScreen] ([AppHeader], [HeroGradient], rounded card surfaces) instead
- * of a plain default Material top bar.
- *
- * @param records            All past [DownloadRecord]s.
- * @param confirmBeforeDelete From Settings — gates whether [onDeleteConfirmed] fires immediately
- *                            or after an in-screen confirmation dialog.
- * @param onBack              Back arrow → returns to Home.
- * @param onOpenDetail        Tapping a row → the detail screen.
- * @param onDeleteConfirmed   The delete has been confirmed (or no confirmation was required).
- * @param onStartNewDownload  Bottom nav Home tap → back to Home screen.
- * @param onOpenPremium       Bottom nav Premium tap → premium screen.
- * @param onOpenSettings      Bottom nav Settings tap → settings screen.
- */
 @Composable
 fun DownloadsScreen(
     records: List<DownloadRecord>,
     confirmBeforeDelete: Boolean,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
+    onOpenDrawer: (() -> Unit)? = null,
     onOpenDetail: (DownloadRecord) -> Unit,
     onDeleteConfirmed: (DownloadRecord) -> Unit,
     onStartNewDownload: () -> Unit,
-    onOpenPremium: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenPremium: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    isPremiumActive: Boolean = false,
+    networkConnection: NetworkConnection = NetworkConnection.WIFI,
+    onRetryConnection: (() -> Unit)? = null,
+    onClearAll: (() -> Unit)? = null
 ) {
     var filter by remember { mutableStateOf(HistoryFilter.ALL) }
     var sortOrder by remember { mutableStateOf(SortOrder.NEWEST) }
@@ -91,18 +83,41 @@ fun DownloadsScreen(
     var searchExpanded by remember { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<DownloadRecord?>(null) }
+    var showClearAllConfirm by remember { mutableStateOf(false) }
+
+    if (showClearAllConfirm) {
+        BentoAlertDialog(
+            onDismissRequest = { showClearAllConfirm = false },
+            title = "Clear all downloads?",
+            subtitle = "This will clear your entire download history from the app.",
+            icon = Icons.Default.Delete,
+            iconTint = ErrorRed,
+            iconBg = Color(0xFFFEE2E2),
+            confirmText = "Clear All",
+            confirmColor = ErrorRed,
+            onConfirm = {
+                showClearAllConfirm = false
+                onClearAll?.invoke()
+            },
+            onDismiss = { showClearAllConfirm = false }
+        )
+    }
 
     pendingDelete?.let { record ->
-        AlertDialog(
+        BentoAlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title   = { Text("Delete this download?") },
-            text    = { Text("This will remove the downloaded file from your device.") },
-            confirmButton = {
-                TextButton(onClick = { onDeleteConfirmed(record); pendingDelete = null }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
+            title = "Delete this download?",
+            subtitle = "This will remove \"${record.mediaInfo.title}\" from your device storage.",
+            icon = Icons.Default.Delete,
+            iconTint = ErrorRed,
+            iconBg = Color(0xFFFEE2E2),
+            confirmText = "Delete",
+            confirmColor = ErrorRed,
+            onConfirm = {
+                onDeleteConfirmed(record)
+                pendingDelete = null
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
+            onDismiss = { pendingDelete = null }
         )
     }
 
@@ -112,6 +127,10 @@ fun DownloadsScreen(
         .filter { record ->
             when (filter) {
                 HistoryFilter.ALL      -> true
+                HistoryFilter.VIDEOS   -> record.outcome == DownloadOutcome.COMPLETE &&
+                    (record.selectedSource.mimeType.startsWith("video/") || record.selectedSource.ext in listOf("mp4", "webm", "mkv"))
+                HistoryFilter.AUDIO    -> record.outcome == DownloadOutcome.COMPLETE &&
+                    (record.selectedSource.mimeType.startsWith("audio/") || record.selectedSource.ext in listOf("mp3", "m4a", "opus", "wav"))
                 HistoryFilter.COMPLETE -> record.outcome == DownloadOutcome.COMPLETE
                 HistoryFilter.FAILED   -> record.outcome == DownloadOutcome.FAILED
             }
@@ -132,6 +151,7 @@ fun DownloadsScreen(
         )
         .toList()
 
+
     val grouped = filtered
         .groupBy { dayBucket(it.timestampMs) }
         .toSortedMap(if (sortOrder == SortOrder.OLDEST) compareBy { it } else compareByDescending { it })
@@ -140,103 +160,206 @@ fun DownloadsScreen(
     val completeCount = records.count { it.outcome == DownloadOutcome.COMPLETE }
     val totalBytes = records.filter { it.outcome == DownloadOutcome.COMPLETE }
         .sumOf { it.selectedSource.fileSizeBytes ?: 0L }
+    val videosCount = records.count { it.outcome == DownloadOutcome.COMPLETE && (it.selectedSource.mimeType.startsWith("video/") || it.selectedSource.ext in listOf("mp4", "webm", "mkv")) }
+    val audioCount = records.count { it.outcome == DownloadOutcome.COMPLETE && (it.selectedSource.mimeType.startsWith("audio/") || it.selectedSource.ext in listOf("mp3", "m4a", "opus", "wav")) }
+    val failedCount = records.count { it.outcome == DownloadOutcome.FAILED }
 
-    // See HomeScreen for why this is an outer Box + overlaid nav bar rather than
-    // Scaffold(bottomBar = ...) — content needs to scroll behind the floating pill, not stop
-    // above it.
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    val isDark = isAppInDarkTheme()
+    val canvasBg = if (isDark) BentoBackgroundDark else BentoBackgroundLight
+
+    Box(modifier = Modifier.fillMaxSize().background(canvasBg)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Bento Header for Subpage
             AppHeader(
                 appName  = "Downloads",
                 tagline  = if (records.isEmpty()) "Nothing saved yet"
                            else "$completeCount saved · ${formatAggregateBytes(totalBytes)}",
                 logoIcon = Icons.Default.Download,
-                actions  = listOf(
-                    HeaderAction(
-                        icon               = if (searchExpanded) Icons.Default.Close else Icons.Default.Search,
-                        contentDescription = if (searchExpanded) "Close search" else "Search downloads",
-                        onClick            = {
-                            searchExpanded = !searchExpanded
-                            if (!searchExpanded) searchQuery = ""
-                        }
+                isGreetingMode = false,
+                isPremiumActive = isPremiumActive,
+                onBackClick = onBack,
+                onMenuClick = onOpenDrawer,
+                onPremiumClick = onOpenPremium,
+                actions  = buildList {
+                    add(
+                        HeaderAction(
+                            icon               = if (searchExpanded) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = if (searchExpanded) "Close search" else "Search downloads",
+                            onClick            = {
+                                searchExpanded = !searchExpanded
+                                if (!searchExpanded) searchQuery = ""
+                            }
+                        )
                     )
-                ),
-                modifier = Modifier.padding(horizontal = 0.dp)
+                    if (records.isNotEmpty() && onClearAll != null) {
+                        add(
+                            HeaderAction(
+                                icon               = Icons.Default.Delete,
+                                contentDescription = "Clear all downloads",
+                                onClick            = { showClearAllConfirm = true }
+                            )
+                        )
+                    }
+                }
             )
+
+            // Reusable Compact Offline Banner when disconnected
+            AnimatedVisibility(
+                visible = networkConnection == NetworkConnection.OFFLINE,
+                enter   = fadeIn(tween(250)) + expandVertically(tween(250)),
+                exit    = fadeOut(tween(150)) + shrinkVertically(tween(150))
+            ) {
+                OfflineWidget(
+                    isBannerMode = true,
+                    title = "Offline Mode",
+                    subtitle = "Showing $completeCount saved files available offline",
+                    onRetry = onRetryConnection,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             AnimatedVisibility(
                 visible = searchExpanded,
                 enter   = fadeIn(tween(200)) + expandVertically(tween(200)),
                 exit    = fadeOut(tween(150)) + shrinkVertically(tween(150))
             ) {
-                OutlinedTextField(
-                    value         = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder   = { Text("Search title, creator, platform…") },
-                    leadingIcon   = { Icon(Icons.Default.Search, contentDescription = null) },
-                    singleLine    = true,
-                    shape         = MaterialTheme.shapes.large,
-                    modifier      = Modifier.fillMaxWidth()
-                )
+                BentoSurfaceCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 100.dp,
+                    elevation = 2.dp
+                ) {
+                    OutlinedTextField(
+                        value         = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder   = { Text("Search title, creator, platform…", color = if (isDark) BentoTextSecondaryDark else BentoTextSecondaryLight) },
+                        leadingIcon   = { Icon(Icons.Default.Search, contentDescription = null, tint = BentoPurplePrimary) },
+                        singleLine    = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
+            // 3 Interactive Pastel Bento Stat Chips (Sage, Sky, Lavender)
             if (records.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    StatCard(
-                        icon     = Icons.Default.Download,
-                        value    = records.size.toString(),
-                        label    = "Total",
+                    BentoStatChip(
+                        icon = Icons.Default.Download,
+                        value = records.size.toString(),
+                        label = "Total",
+                        bg = BentoSageContainer,
+                        textColor = BentoSageText,
+                        subColor = BentoSageSubtext,
+                        isSelected = filter == HistoryFilter.ALL,
+                        onClick = { filter = HistoryFilter.ALL },
                         modifier = Modifier.weight(1f)
                     )
-                    StatCard(
-                        icon     = Icons.Default.CheckCircle,
-                        value    = completeCount.toString(),
-                        label    = "Complete",
+                    BentoStatChip(
+                        icon = Icons.Default.CheckCircle,
+                        value = completeCount.toString(),
+                        label = "Complete",
+                        bg = BentoSkyContainer,
+                        textColor = BentoSkyText,
+                        subColor = BentoSkySubtext,
+                        isSelected = filter == HistoryFilter.COMPLETE,
+                        onClick = { filter = HistoryFilter.COMPLETE },
                         modifier = Modifier.weight(1f)
                     )
-                    StatCard(
-                        icon     = Icons.Default.SdStorage,
-                        value    = formatAggregateBytes(totalBytes),
-                        label    = "Saved",
+                    BentoStatChip(
+                        icon = Icons.Default.SdStorage,
+                        value = formatAggregateBytes(totalBytes),
+                        label = "Saved",
+                        bg = BentoLavenderContainer,
+                        textColor = BentoLavenderText,
+                        subColor = BentoLavenderSubtext,
+                        isSelected = sortOrder == SortOrder.LARGEST,
+                        onClick = { sortOrder = SortOrder.LARGEST },
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
 
-            // Status filter chips + sort control
+            // Status filter pill row + sort control (horizontally scrollable, zero overflow)
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically,
-                modifier               = Modifier.fillMaxWidth()
+                modifier              = Modifier.fillMaxWidth()
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     HistoryFilter.entries.forEach { f ->
+                        if (f == HistoryFilter.FAILED && failedCount == 0) return@forEach
                         val selected = f == filter
-                        FilterChip(
-                            selected = selected,
-                            onClick  = { filter = f },
-                            label    = { Text(f.label, style = MaterialTheme.typography.labelMedium) },
-                            shape    = MaterialTheme.shapes.extraLarge,
-                            colors   = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor     = MaterialTheme.colorScheme.onPrimary
-                            )
-                        )
+                        val count = when (f) {
+                            HistoryFilter.ALL -> records.size
+                            HistoryFilter.VIDEOS -> videosCount
+                            HistoryFilter.AUDIO -> audioCount
+                            HistoryFilter.COMPLETE -> completeCount
+                            HistoryFilter.FAILED -> failedCount
+                        }
+                        Surface(
+                            onClick = { filter = f },
+                            shape = RoundedCornerShape(100.dp),
+                            color = if (selected) BentoPurplePrimary else if (isDark) BentoCardDark else BentoCardWhite,
+                            shadowElevation = if (selected) 2.dp else 1.dp
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = f.label,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (selected) Color.White else if (isDark) BentoTextPrimaryDark else BentoTextSecondaryLight
+                                )
+                                if (count > 0) {
+                                    Surface(
+                                        shape = RoundedCornerShape(100.dp),
+                                        color = if (selected) Color.White.copy(alpha = 0.25f) else if (isDark) Color(0xFF282C40) else Color(0xFFE2E8F0)
+                                    ) {
+                                        Text(
+                                            text = "$count",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = if (selected) Color.White else if (isDark) Color(0xFFCBD5E1) else BentoTextSecondaryLight,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+                Spacer(Modifier.width(6.dp))
                 Box {
-                    AssistChip(
+                    Surface(
                         onClick = { sortMenuExpanded = true },
-                        label   = { Text(sortOrder.label, style = MaterialTheme.typography.labelMedium) },
-                        leadingIcon = { Icon(Icons.Default.SwapVert, contentDescription = "Sort", modifier = Modifier.size(16.dp)) },
-                        shape   = MaterialTheme.shapes.extraLarge
-                    )
+                        shape = RoundedCornerShape(100.dp),
+                        color = if (isDark) BentoCardDark else BentoCardWhite,
+                        shadowElevation = 1.dp
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.SwapVert, contentDescription = "Sort", modifier = Modifier.size(15.dp), tint = BentoPurplePrimary)
+                            Spacer(Modifier.width(3.dp))
+                            Text(sortOrder.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) BentoTextPrimaryDark else BentoTextPrimaryLight)
+                        }
+                    }
                     DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
                         SortOrder.entries.forEach { order ->
                             DropdownMenuItem(
@@ -250,55 +373,69 @@ fun DownloadsScreen(
 
             if (filtered.isEmpty()) {
                 Column(
-                    modifier            = Modifier.fillMaxWidth().padding(top = 48.dp),
+                    modifier            = Modifier.fillMaxWidth().padding(top = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        modifier         = Modifier.size(72.dp).clip(CircleShape).background(HeroGradient),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Inbox,
-                            contentDescription = null,
-                            tint     = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
+                    BentoCircleBadge(
+                        icon = Icons.Default.Inbox,
+                        contentDescription = null,
+                        size = 64.dp,
+                        iconSize = 30.dp,
+                        tint = Color.White,
+                        backgroundColor = BentoPurplePrimary,
+                        elevation = 3.dp
+                    )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        if (query.isNotBlank()) "No downloads match \"$query\""
-                        else "No ${filter.label.lowercase()} downloads yet",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = if (query.isNotBlank()) "No downloads matching \"$query\""
+                               else "No downloads in this tab",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BentoTextPrimaryLight
                     )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Paste a URL on Home to download any video or audio",
+                        fontSize = 13.sp,
+                        color = BentoTextSecondaryLight
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Button(
+                        onClick = onStartNewDownload,
+                        shape = RoundedCornerShape(100.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = BentoPurplePrimary)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Download Media", fontWeight = FontWeight.Bold)
+                    }
                 }
             } else if (sortIsDateBased) {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding      = PaddingValues(bottom = 180.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding      = PaddingValues(bottom = 180.dp, top = 4.dp)
                 ) {
                     var itemCounter = 0
-                    grouped.forEach { (day, dayRecords) ->
-                        item(key = "header_$day") {
+                    grouped.forEach { (bucket, recordsInBucket) ->
+                        val sampleEpoch = recordsInBucket.firstOrNull()?.timestampMs ?: (bucket * 86_400_000L)
+                        item(key = "header_$bucket") {
                             Text(
-                                text     = formatDayHeader(dayRecords.first().timestampMs),
-                                style    = MaterialTheme.typography.labelLarge,
+                                text     = formatDayHeader(sampleEpoch),
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+                                color    = BentoTextSecondaryLight,
+                                modifier = Modifier.padding(top = 10.dp, bottom = 4.dp, start = 4.dp)
                             )
                         }
-                        dayRecords.forEach { record ->
+                        recordsInBucket.forEach { record ->
                             item(key = record.id) {
-                                DownloadRowCard(
+                                DownloadRow(
                                     record          = record,
                                     onOpenDetail    = onOpenDetail,
                                     onDeleteRequest = { r -> if (confirmBeforeDelete) pendingDelete = r else onDeleteConfirmed(r) }
                                 )
                             }
                             itemCounter++
-                            // A native ad every 6 rows — a standard, policy-safe in-feed density
-                            // (impressions without turning the list into an ad wall).
                             if (itemCounter % 6 == 0) {
                                 item(key = "native_ad_$itemCounter") {
                                     NativeAdCard(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
@@ -308,15 +445,14 @@ fun DownloadsScreen(
                     }
                 }
             } else {
-                // Size-based sort doesn't group meaningfully by date — flat list instead.
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding      = PaddingValues(bottom = 180.dp, top = 4.dp)
                 ) {
                     var itemCounter = 0
                     filtered.forEach { record ->
                         item(key = record.id) {
-                            DownloadRowCard(
+                            DownloadRow(
                                 record          = record,
                                 onOpenDetail    = onOpenDetail,
                                 onDeleteRequest = { r -> if (confirmBeforeDelete) pendingDelete = r else onDeleteConfirmed(r) }
@@ -332,55 +468,45 @@ fun DownloadsScreen(
                 }
             }
         }
-
-        AppBottomBarWithAd(
-            selectedIdx = 1,
-            onHome      = onStartNewDownload,
-            onDownloads = { /* already downloads */ },
-            onPremium   = onOpenPremium,
-            onSettings  = onOpenSettings,
-            modifier    = Modifier.align(Alignment.BottomCenter)
-        )
     }
 }
 
-/** One of the three at-a-glance numbers shown above the list (Total / Complete / Saved). */
+/** Bento Pastel Stat Chip (Total / Complete / Saved). */
 @Composable
-private fun StatCard(icon: ImageVector, value: String, label: String, modifier: Modifier = Modifier) {
-    Surface(
+private fun BentoStatChip(
+    icon: ImageVector,
+    value: String,
+    label: String,
+    bg: Color,
+    textColor: Color,
+    subColor: Color,
+    isSelected: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    BentoSurfaceCard(
         modifier = modifier,
-        shape    = MaterialTheme.shapes.medium,
-        color    = MaterialTheme.colorScheme.surface
+        cornerRadius = 22.dp,
+        backgroundColor = bg,
+        borderColor = if (isSelected) textColor.copy(alpha = 0.5f) else Color.Transparent,
+        elevation = if (isSelected) 3.dp else 1.dp,
+        onClick = onClick
     ) {
         Column(
-            modifier            = Modifier.padding(vertical = 12.dp, horizontal = 10.dp),
+            modifier            = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            BentoCircleBadge(
+                icon = icon,
+                size = 32.dp,
+                iconSize = 16.dp,
+                tint = textColor,
+                elevation = 1.dp
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(value, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = textColor, maxLines = 1)
+            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = subColor)
         }
     }
 }
 
-/** [DownloadRow] wrapped in its own rounded surface card — separates rows visually instead of a flat list. */
-@Composable
-private fun DownloadRowCard(
-    record: DownloadRecord,
-    onOpenDetail: (DownloadRecord) -> Unit,
-    onDeleteRequest: (DownloadRecord) -> Unit
-) {
-    Surface(
-        shape    = RoundedCornerShape(18.dp),
-        color    = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        DownloadRow(
-            record          = record,
-            onOpenDetail    = onOpenDetail,
-            onDeleteRequest = onDeleteRequest,
-            modifier        = Modifier.padding(horizontal = 10.dp)
-        )
-    }
-}

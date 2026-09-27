@@ -14,26 +14,32 @@ class SharedPrefsSettingsStore(context: Context) : SettingsStore {
         themeMode           = runCatching { ThemeMode.valueOf(prefs.getString(KEY_THEME, null) ?: "") }
             .getOrDefault(ThemeMode.SYSTEM),
         wifiOnlyDownloads   = prefs.getBoolean(KEY_WIFI_ONLY, false),
+        warnOnCellular      = prefs.getBoolean(KEY_WARN_CELLULAR, true),
         confirmBeforeDelete = prefs.getBoolean(KEY_CONFIRM_DELETE, true),
         askBeforeDownload   = prefs.getBoolean(KEY_ASK_DOWNLOAD, false),
-        autoDetectClipboard = prefs.getBoolean(KEY_CLIPBOARD, true)
+        autoDetectClipboard = prefs.getBoolean(KEY_CLIPBOARD, true),
+        adsEnabled          = prefs.getBoolean(KEY_ADS_ENABLED, true)
     )
 
     override suspend fun save(settings: AppSettings) {
         prefs.edit()
             .putString(KEY_THEME, settings.themeMode.name)
             .putBoolean(KEY_WIFI_ONLY, settings.wifiOnlyDownloads)
+            .putBoolean(KEY_WARN_CELLULAR, settings.warnOnCellular)
             .putBoolean(KEY_CONFIRM_DELETE, settings.confirmBeforeDelete)
             .putBoolean(KEY_ASK_DOWNLOAD, settings.askBeforeDownload)
             .putBoolean(KEY_CLIPBOARD, settings.autoDetectClipboard)
+            .putBoolean(KEY_ADS_ENABLED, settings.adsEnabled)
             .apply()
     }
 
     private companion object {
         const val KEY_THEME = "settings_theme_mode"
         const val KEY_WIFI_ONLY = "settings_wifi_only"
+        const val KEY_WARN_CELLULAR = "settings_warn_cellular"
         const val KEY_CONFIRM_DELETE = "settings_confirm_delete"
         const val KEY_ASK_DOWNLOAD = "settings_ask_download"
         const val KEY_CLIPBOARD = "settings_auto_clipboard"
+        const val KEY_ADS_ENABLED = "settings_ads_enabled"
     }
 }

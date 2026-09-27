@@ -82,18 +82,19 @@ fun FloatingPillNavBar(
     selectedIdx:          Int,
     onSelect:             (Int) -> Unit,
     modifier:             Modifier = Modifier,
-    barColor:             Color    = MaterialTheme.colorScheme.inverseSurface,
-    chipColor:            Color    = MaterialTheme.colorScheme.primary,
-    selectedContentColor: Color    = MaterialTheme.colorScheme.onPrimary,
-    unselectedIconColor:  Color    = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.75f)
+    barColor:             Color    = Color(0xFF16161D),
+    chipColor:            Color    = com.mediasaver.app.ui.theme.BentoPurplePrimary,
+    selectedContentColor: Color    = Color.White,
+    unselectedIconColor:  Color    = Color.White.copy(alpha = 0.55f)
 ) {
     // Outer container — adds bottom padding for Android gesture-nav insets
     Box(
         modifier         = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
+
         // ── Dark pill bar ─────────────────────────────────────────────────────
         Row(
             modifier              = Modifier

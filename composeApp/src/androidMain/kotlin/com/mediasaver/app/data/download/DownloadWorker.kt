@@ -33,6 +33,12 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
         val mediaInfo = runCatching { Json.decodeFromString<MediaInfo>(mediaInfoJson) }.getOrNull() ?: return Result.failure()
         val source = runCatching { Json.decodeFromString<MediaSource>(sourceJson) }.getOrNull() ?: return Result.failure()
 
+        val settings = runCatching { AppModule.settingsStore.load() }.getOrNull()
+        if (settings?.wifiOnlyDownloads == true && !com.mediasaver.app.data.platform.isOnWifi()) {
+            DownloadNotifier.showFailed(applicationContext, notificationId, mediaInfo.title, "Download paused: Waiting for Wi-Fi")
+            return Result.retry()
+        }
+
         DownloadNotifier.ensureChannels(applicationContext)
         setForeground(foregroundInfo(mediaInfo.title, percent = 0, merging = false))
 
@@ -40,7 +46,12 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
         AppModule.repository.download(mediaInfo, source, destDir = null).collect { status ->
             when (status) {
                 is DownloadStatus.Downloading -> {
-                    setProgress(workDataOf(KEY_PERCENT to status.progressPercent, KEY_SPEED_BPS to (status.speedBps ?: -1L)))
+                    setProgress(workDataOf(
+                        KEY_PERCENT to status.progressPercent,
+                        KEY_SPEED_BPS to (status.speedBps ?: -1L),
+                        KEY_DOWNLOADED_BYTES to status.bytesDownloaded,
+                        KEY_TOTAL_BYTES to status.totalBytes
+                    ))
                     setForeground(foregroundInfo(mediaInfo.title, status.progressPercent, merging = false, speed = status.speedFormatted))
                 }
                 is DownloadStatus.Merging -> {
@@ -90,6 +101,8 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
         const val KEY_TITLE = "title"
         const val KEY_PERCENT = "percent"
         const val KEY_SPEED_BPS = "speed_bps"
+        const val KEY_DOWNLOADED_BYTES = "downloaded_bytes"
+        const val KEY_TOTAL_BYTES = "total_bytes"
         const val KEY_MERGING = "merging"
         const val KEY_FILE_PATH = "file_path"
         const val KEY_ERROR = "error"

@@ -8,6 +8,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.mediasaver.app.data.platform.areAdsGloballyEnabled
 
 /**
  * The single, persistent banner-ad placement in the app — a strip docked to the true bottom of
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
  */
 @Composable
 fun StickyBannerBar(modifier: Modifier = Modifier) {
+    if (!areAdsGloballyEnabled()) return
     Surface(
         modifier = modifier.fillMaxWidth(),
         color    = MaterialTheme.colorScheme.surface

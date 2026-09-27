@@ -32,7 +32,10 @@ sealed interface AppUiState {
     data class Downloading(
         val progressPercent: Int,
         val speedFormatted: String,
-        val mediaInfo: MediaInfo
+        val mediaInfo: MediaInfo,
+        val bytesDownloaded: Long = 0L,
+        val totalBytes: Long = 0L,
+        val isMerging: Boolean = false
     ) : AppUiState
 
     /**

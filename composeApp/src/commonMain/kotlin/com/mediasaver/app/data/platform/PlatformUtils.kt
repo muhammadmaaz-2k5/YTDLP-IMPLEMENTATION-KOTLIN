@@ -29,8 +29,23 @@ expect fun openApp(packageName: String, webFallbackUrl: String)
 /** Opens the system share sheet for a previously-downloaded file at [filePath]. */
 expect fun shareFile(filePath: String, mimeType: String)
 
+enum class NetworkConnection {
+    WIFI,
+    CELLULAR,
+    OFFLINE
+}
+
 /** True if the device currently has an active, non-metered (Wi-Fi) connection. */
 expect fun isOnWifi(): Boolean
+
+/** True if the device is currently connected via mobile cellular data. */
+expect fun isOnCellular(): Boolean
+
+/** True if an active internet connection is available. */
+expect fun isOnline(): Boolean
+
+/** Returns the current network connection type (Wi-Fi, Cellular, or Offline). */
+expect fun getNetworkConnection(): NetworkConnection
 
 /**
  * Reads the system clipboard's current text, once, and returns it only if it looks like a
@@ -67,4 +82,13 @@ expect fun showRewardedAd(onRewardEarned: () -> Unit, onAdUnavailable: () -> Uni
  * of Interstitial (see [com.mediasaver.app.data.ads.AdsController]).
  */
 expect fun showRewardedInterstitialAd(onRewardEarned: () -> Unit, onAdUnavailable: () -> Unit)
+
+/**
+ * Sets whether all advertisements (banner, native, interstitial, rewarded, app open) are enabled
+ * or disabled globally throughout the application.
+ */
+expect fun setAdsGloballyEnabled(enabled: Boolean)
+
+/** Returns whether advertisements are currently enabled globally. */
+expect fun areAdsGloballyEnabled(): Boolean
 

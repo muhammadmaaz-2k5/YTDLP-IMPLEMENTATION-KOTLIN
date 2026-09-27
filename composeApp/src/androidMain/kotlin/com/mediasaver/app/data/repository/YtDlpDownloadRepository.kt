@@ -33,12 +33,11 @@ class YtDlpDownloadRepository(
     private val _history = MutableStateFlow<List<DownloadRecord>>(emptyList())
 
     override suspend fun extractMedia(url: String): List<MediaInfo> {
-        val trimmed = url.trim()
-        require(trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            "Please enter a valid http(s) URL."
-        }
-        return listOf(engine.fetchMetadata(trimmed))
+        val cleanedUrl = com.mediasaver.app.domain.util.SmartUrlEngine.extractAndCleanUrl(url)
+            ?: throw IllegalArgumentException("Please enter or paste a valid video or media link.")
+        return listOf(engine.fetchMetadata(cleanedUrl))
     }
+
 
     override fun download(mediaInfo: MediaInfo, source: MediaSource, destDir: String?): Flow<DownloadStatus> = flow {
         engine.download(mediaInfo, source).collect { status ->

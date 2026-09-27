@@ -16,6 +16,8 @@ data class MediaInfo(
     val platform: Platform,
     val uploader: String? = null,
     val durationSeconds: Int? = null,
+    val description: String? = null,
+    val tags: List<String> = emptyList(),
     val sources: List<MediaSource> = emptyList()
 ) {
     val bestSource: MediaSource? get() = sources.firstOrNull()
@@ -26,6 +28,9 @@ data class MediaInfo(
         INSTAGRAM("Instagram"),
         YOUTUBE("YouTube"),
         TIKTOK("TikTok"),
+        TWITTER("X / Twitter"),
+        PINTEREST("Pinterest"),
         GENERIC("Web")
     }
 }
+

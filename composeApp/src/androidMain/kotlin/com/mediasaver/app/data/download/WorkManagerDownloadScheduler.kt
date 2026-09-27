@@ -1,17 +1,21 @@
 package com.mediasaver.app.data.download
 
 import android.content.Context
+import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import com.mediasaver.app.data.di.AppModule
 import com.mediasaver.app.domain.model.DownloadStatus
 import com.mediasaver.app.domain.model.MediaInfo
 import com.mediasaver.app.domain.model.MediaSource
 import com.mediasaver.app.domain.repository.DownloadScheduler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -29,7 +33,15 @@ class WorkManagerDownloadScheduler(private val context: Context) : DownloadSched
     private val workManager get() = WorkManager.getInstance(context)
 
     override fun enqueue(jobId: String, mediaInfo: MediaInfo, source: MediaSource) {
+        val isWifiOnly = runBlocking {
+            runCatching { AppModule.settingsStore.load().wifiOnlyDownloads }.getOrDefault(false)
+        }
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(if (isWifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+            .build()
+
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
+            .setConstraints(constraints)
             .setInputData(
                 workDataOf(
                     DownloadWorker.KEY_MEDIA_INFO to Json.encodeToString(mediaInfo),
@@ -57,7 +69,14 @@ class WorkManagerDownloadScheduler(private val context: Context) : DownloadSched
             } else {
                 val percent = progress.getInt(DownloadWorker.KEY_PERCENT, 0)
                 val speedBps = progress.getLong(DownloadWorker.KEY_SPEED_BPS, -1L).takeIf { it >= 0 }
-                DownloadStatus.Downloading(progressPercent = percent, speedBps = speedBps)
+                val downloaded = progress.getLong(DownloadWorker.KEY_DOWNLOADED_BYTES, 0L)
+                val total = progress.getLong(DownloadWorker.KEY_TOTAL_BYTES, 0L)
+                DownloadStatus.Downloading(
+                    progressPercent = percent,
+                    speedBps = speedBps,
+                    bytesDownloaded = downloaded,
+                    totalBytes = total
+                )
             }
         }
         WorkInfo.State.SUCCEEDED -> DownloadStatus.Done(outputData.getString(DownloadWorker.KEY_FILE_PATH) ?: "")

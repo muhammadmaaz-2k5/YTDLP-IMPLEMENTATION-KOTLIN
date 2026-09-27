@@ -67,7 +67,38 @@ actual fun isOnWifi(): Boolean {
     val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return true
     val network = cm.activeNetwork ?: return false
     val capabilities = cm.getNetworkCapabilities(network) ?: return false
-    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+           capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+}
+
+actual fun isOnCellular(): Boolean {
+    val context = AppContextHolder.context
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+    val network = cm.activeNetwork ?: return false
+    val capabilities = cm.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+}
+
+actual fun isOnline(): Boolean {
+    val context = AppContextHolder.context
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return true
+    val network = cm.activeNetwork ?: return false
+    val capabilities = cm.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}
+
+actual fun getNetworkConnection(): NetworkConnection {
+    val context = AppContextHolder.context
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return NetworkConnection.OFFLINE
+    val network = cm.activeNetwork ?: return NetworkConnection.OFFLINE
+    val capabilities = cm.getNetworkCapabilities(network) ?: return NetworkConnection.OFFLINE
+    if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return NetworkConnection.OFFLINE
+    return when {
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkConnection.WIFI
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkConnection.CELLULAR
+        else -> NetworkConnection.WIFI
+    }
 }
 
 actual fun readClipboardUrlIfPresent(): String? = runCatching {
@@ -107,4 +138,12 @@ actual fun showRewardedAd(onRewardEarned: () -> Unit, onAdUnavailable: () -> Uni
 
 actual fun showRewardedInterstitialAd(onRewardEarned: () -> Unit, onAdUnavailable: () -> Unit) {
     AdsController.showRewardedInterstitialAd(onRewardEarned, onAdUnavailable)
+}
+
+actual fun setAdsGloballyEnabled(enabled: Boolean) {
+    AdsController.setAdsEnabled(enabled)
+}
+
+actual fun areAdsGloballyEnabled(): Boolean {
+    return AdsController.isAdsEnabled()
 }
